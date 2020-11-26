@@ -1,5 +1,5 @@
 ;------------------------------------ 
-; ce programme fait clignoter une led sur la carte curiosity 
+; 
 ; la led est sur la broche RA2 elle est active à 0 
 ; un bouton poussoir est disposé sur la broche RC2     
 ;------------------------------------ 
