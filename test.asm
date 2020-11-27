@@ -7,6 +7,7 @@
 ; dÈfinition du processeur 
 PROCESSOR 16f18446 
 #include <xc.inc> 
+ 
 ;------------------------------------ 
 
 ;definition de la configuration 
@@ -60,27 +61,46 @@ config CP = OFF         // UserNVM Program memory code protection bit (UserNVM c
 
 ;------------------------------------ 
 ;assignation des port du pic 
-#define bouton1	PORTC,7 
-#define bouton2	PORTC,6 
+#define BMode	PORTC,7 
+#define BReglage    PORTC,6 
 #define bouton3	PORTC,4
 #define potar	PORTC,0
-#define led	PORTA,2 
-#define seg_clk PORTC,1 ;SCK
-#define seg_data PORTC,2 ;SD1
-#define seg_latch PORTC,3 ;LT
+#define led	LATA,2 
+#define seg_clk LATC,1 ;SCK
+#define seg_data LATC,2 ;SD1
+#define seg_latch LATC,3 ;LT
+#define	TMR1F	PIR4,0
+#define GIE	INTCON,7
 ;------------------------------------ 
 
 ;definition des variables 
 PSECT  udata_bank0    ; debut de la ram 
-w_temp: ds 1        ; chaque variable est codÈe sur 1 octet 
-status_temp:ds 1 
 temp0:ds 1 
 temp1:ds 1 
 temp2:ds 1 
 nbBit:ds 1
-valtable:ds 1
+    
+Reglage:ds 1 ; variable indiquant en quel mode de reglage on se trouve
+Mode:ds 1   ; variable indiquant le mode dans lequel on est
 
-     
+DHeure:ds 1 ; les dizianes d'heure
+Heure: ds 1 ;les heures
+DMin: ds 1  ; les dizaines de minutes	
+Min: ds 1   ;les minutes
+
+CDMin: ds 1 ; valeur des temp chrono
+CMin: ds 1
+CDSec: ds 1
+CSec: ds 1
+  
+ADHeure:ds 1 ; L'alarme
+AHeure: ds 1
+ADMin: ds 1  	
+AMin: ds 1 
+    
+
+Potar: ds 1  ;0 à 9
+Clignotement: ds 1   
 
 ;------------------------------------ 
 
@@ -88,9 +108,20 @@ valtable:ds 1
 PSECT resetVect,delta=2,class=code    
 
 org 000H        ; vecteur de reset 
+   
     goto main 
 
 org 004H        ; vecteur d'interruption 
+    BANKSEL PIR4
+    bcf	    TMR1F
+    
+    BANKSEL TMR1H
+    bsf	    TMR1H,7
+    
+    BANKSEL LATA
+    movlw   00000100B
+    xorwf   LATA,F
+    call interuptsec
     retfie 
 ;------------------------------------ 
 
@@ -99,44 +130,252 @@ PSECT code
 ;programme principal 
 
 main: 
-    movlw   0xFE
-    movwf   valtable
-    movlw   0x06
-    ADDWF   valtable,W
     call    initialisation        ; appeler le sous programme initialisation 
     bcf	    seg_clk
     bcf	   seg_latch
-
-boucle:                    ; repère dans le programme 
-    movlw   0xFF
-    call    tempo
-    movlw   0xFF
-    call    tempo
-    movlw   0xFF
-    call    tempo
-    movlw   0xFF
-    call    tempo
+    ;;;;set les valeurs de temps
+    movlw   00000001B
+    movwf   Mode
+    movlw   00000001B
+    movwf   Reglage
+    
     movlw   0x01
-    call    setChiffreSeg
-    ;btfss  bouton1
-    ;call   dataH
-    ;btfss   bouton2
-    ;call   dataL
-   ; btfss  bouton3
-   ; bsf	   seg_latch
-   ; bcf	   seg_latch
-    ;call lecturePotarON
-    ;call lecturePotarOFF
-    ;bsf led;
-    ;movlw   0xFF;
-    ;call    tempo;
-    ;bcf	    led;
-    ;movlw   0xFF;
-    ;call    tempo;
+    movwf   DHeure
+    movlw   0x01
+    movwf   Heure
+    movlw   0x01
+    movwf   DMin
+    movlw   0x01
+    movwf   Min
+    clrf    CDMin
+    clrf    CMin
+    clrf    CDSec
+    clrf    CSec
+    clrf    ADHeure
+    clrf    AHeure
+    clrf    ADMin 	
+    clrf    AMin 
+    clrf    Clignotement
+boucle:                    ; repère dans le programme 
+    btfsc   Mode,0
+    call    Horloge		;si 1er bit de Mode à 1 alors on va dans la boucle heure ext
+    btfsc   Mode,1
+    call    Chrono
+    btfsc   Mode,2
+    call    Alarme
+    btfss   BMode
+    call    AfficheMode
+    
+    
     goto    boucle
 
-;------------------------------------ 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Heure;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Horloge:
+    btfsc   Reglage,0	; sil le premier bit de Réglage est à 1 alors on affiche l'heure
+    call    afficheHeure
+    btfsc   Reglage,1	; sil le second bit de Réglage est à 1 alors on modifie les dizaines d'heures....
+    call    ReglageDHeure
+    btfsc   Reglage,2
+    call    ReglageHeure
+    btfsc   Reglage,3
+    call    ReglageDMin
+    btfsc   Reglage,4
+    call    ReglageMin
+    return
+ReglageDHeure:
+    call LecturePotar
+    movwf DHeure
+    movlw 00001000B
+    movwf Clignotement
+    call AfficheHeureCligno
+    return
+ReglageHeure:
+    call LecturePotar
+    movwf Heure
+    movlw 00000100B
+    movwf Clignotement
+    call AfficheHeureCligno
+    return
+ReglageDMin:
+    call LecturePotar
+    movwf DMin
+    movlw 00000010B
+    movwf Clignotement
+    call AfficheHeureCligno
+    return
+ReglageMin:
+    call LecturePotar
+    movwf Min
+    movlw 00000001B
+    movwf Clignotement
+    call AfficheHeureCligno
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Fin Heure ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+    
+    
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Chrono ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Chrono:
+    btfsc Reglage,0	; sil le premier bit de Réglage est à 1 alors on affiche le chrono
+    call affichechrono
+    btfsc Reglage,1	; sil le second bit de Réglage est à 1 alors on reset le chrono
+    call ClearChrono
+    return
+ClearChrono:
+    clrf    CDMin
+    clrf    CMin
+    clrf    CSec
+    clrf    CDSec
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  Chrono ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Alarme ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Alarme:
+    return
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; interuption;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+interuptsec:
+    
+    btfss  BReglage ;si le bouton set est apuillé
+    call   ReglageSet
+    btfss  BMode ;si le bouton Mode est apuillé
+    call   ModeSet
+    
+    
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin interuption ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Reglage et mode;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ModeSet:
+    rlf Mode
+    btfss Mode,3
+    call ResetMode
+    call ResetReglage
+    return
+ResetMode:
+    movlw   0x01
+    movwf   Mode
+    return
+ReglageSet:
+    rlf Reglage
+    btfss Reglage,5
+    call ResetReglage
+    btfss Mode,1
+    call ModeChronoReglage
+    return
+ModeChronoReglage:
+    btfss Reglage,2
+    call ResetReglage 
+    return
+ResetReglage:
+    movlw   0x01
+    movwf   Reglage
+    return
+AfficheMode:
+    btfss Mode,0
+    call AfficheModeHeure
+    btfss Mode,1
+    call AfficheModeChrono
+    btfss Mode,2
+    call AfficheModeAlarme
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; fin Réglage et mode ;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  7 Segement  ;;;;;;;;;;;;;;;;;;;;;;;;;  
+affichechrono:
+    movf    CSec,W 
+    call    setChiffreSeg
+    movf    CDSec,W
+    call    setChiffreSeg
+    movf    CMin,W
+    call    setChiffreSeg
+    movf    CDMin,W
+    call    setChiffreSeg
+    return
+afficheHeure:
+    movf   Min,W 
+    call    setChiffreSeg
+    movf    DMin,W
+    call    setChiffreSeg
+    movf    Heure,W
+    call    setChiffreSeg
+    movf    DHeure,W
+    call    setChiffreSeg
+    return
+AfficheHeureCligno:
+    movf    Min,W 
+    btfss   Clignotement,0
+    movlw   00010110B ;vide
+    call    setChiffreSeg
+    
+    movf    DMin,W 
+    btfss   Clignotement,1
+    movlw   00010110B ;vide
+    call    setChiffreSeg
+    
+    movf    Heure,W 
+    btfss   Clignotement,2
+    movlw   00010110B ;vide
+    call    setChiffreSeg
+    
+    movf    DHeure,W 
+    btfss   Clignotement,3
+    movlw   00010110B ;vide
+    call    setChiffreSeg
+    
+    movlw   0xFF
+    call tempo
+    call afficheHeure
+    call tempo
+    return
+AfficheModeAlarme:
+    movlw   00010110B 
+    call    setChiffreSeg
+    movlw   00010110B
+    call    setChiffreSeg
+    movlw   00010110B
+    call    setChiffreSeg
+    movlw   0x0A    ;Lettre A de la table
+    call    setChiffreSeg
+    movlw   0xFF
+    call tempo
+    movlw   0xFF
+    call tempo
+    return
+AfficheModeChrono:
+    movlw   00010110B 
+    call    setChiffreSeg
+    movlw   00010110B
+    call    setChiffreSeg
+    movlw   00010110B
+    call    setChiffreSeg
+    movlw   0x0B    ;lettre C de la table
+    call    setChiffreSeg
+    movlw   0xFF
+    call tempo
+    movlw   0xFF
+    call tempo
+    return
+AfficheModeHeure:
+    movlw   00010110B 
+    call    setChiffreSeg
+    movlw   00010110B
+    call    setChiffreSeg
+    movlw   00010110B
+    call    setChiffreSeg
+    movlw   0x0C	;lettre H de la table
+    call    setChiffreSeg
+    movlw   0xFF
+    call tempo
+    movlw   0xFF
+    call tempo
+    return
 setChiffreSeg: 
    call table
    call setBitSeg
@@ -178,20 +417,54 @@ dataL:
     bsf	    seg_clk
     bcf	    seg_clk
     return
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  Fin 7 SEG  ;;;;;;;;;;;;;;;;;;;;;;;; 
     
-lecturePotarOFF:
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Potar  ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+LecturePotar:
    BANKSEL  ADCON0
+   bsf	   ADCON0,0
+   call Comparaison
+   movwf    potar
    bcf	   ADCON0,0
    BANKSEL  PORTC
    return
+Comparaison:
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x02
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x03
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x04
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x05
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x06
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x07
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x08
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x09
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin Potar ;;;;;;;;;;;;;;;;;;;;;;;;;;;
    
-lecturePotarON:
-   BANKSEL  ADCON0
-   bsf	   ADCON0,0
-   BANKSEL  PORTC
-   return
-;sous programme d'initialisation du microcontroleur    
-
+ ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Initialisation;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 initialisation: 
     BANKSEL PORTA
     clrf    PORTA	; efface les PORTA, B et C
@@ -222,20 +495,37 @@ initialisation:
     bsf	    ADCON0,0
     movwf   ADCON0	; configure le ADC
     
+    ; CONFIGURATION TIMER 
+    BANKSEL TMR1H	
+    bsf	    TMR1H,7	; Met le compteur Timer1 à 32760
+    
+    BANKSEL T1CON	
+    movlw   00000101B	; Active le Timer1
+    movwf   T1CON
+    
+    BANKSEL T1GCON  
+    clrf   T1GCON
+    
+    BANKSEL T1CLK
+    movlw   00000111B	; Selectionne le quartz externe comme source pour Timer1
+    movwf   T1CLK
+    
+ 
+    BANKSEL PIE4
+    bsf PIE4,0		; Active l'interruption de Timer1
+    
+    BANKSEL INTCON
+    movlw   11000000B	; Active les interruptions
+    movwf   INTCON
     BANKSEL PORTA
     
-   
-    
-    
-   
-	
-    
-    return		; fin du sous programme 
+    return		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin initialisation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     
     
-; Tempo    
     
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Tempo;;;;;;;;;;;;;;;;;;;;;;;;    
 tempo:     
     movwf   temp0        ; temp0 = Wreg 
 
@@ -250,19 +540,32 @@ boucle3:
     decfsz  temp0,F 
     goto    boucle2 
     return 
-   
+ 
 table:
-    addwf   PCL,F
-    retlw   01111110B ;0
-    retlw   00001010B ;1
-    retlw   10110110B ;2
-    retlw   10011110B ;3
-    retlw   11001010B ;4
-    retlw   11011100B ;5
-    retlw   11111100B ;6
-    retlw   00001110B ;7
-    retlw   11111110B ;8
-    retlw   11011110B ;9
+    brw
+    retlw   01111110B ;0   0
+    retlw   00001010B ;1    1
+    retlw   10110110B ;2    2
+    retlw   10011110B ;3    3
+    retlw   11001010B ;4    4
+    retlw   11011100B ;5    5
+    retlw   11111100B ;6    6
+    retlw   00001110B ;7    7
+    retlw   11111110B ;8    8
+    retlw   11011110B ;9    9
+    retlw   11101110B      ;A    10
+    retlw   01110100B      ;C    11
+    retlw   11101010B      ;H    12
+    retlw   10110110B      ;S    13
+    retlw   11110100B      ;E    14
+    retlw   11011110B      ;    15
+    retlw   11011110B	   ;    16
+    retlw   11011110B	   ;    17
+    retlw   11011110B	   ;    18	      
+    retlw   11011110B	   ;    19
+    retlw   11011110B	   ;    20	      
+    retlw   11011110B	   ;    21
+    retlw   00000000B	   ;Vide 22
     
     
     end        ; fin du code source 
