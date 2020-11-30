@@ -78,21 +78,18 @@ PSECT  udata_bank0    ; debut de la ram
 temp0:ds 1 
 temp1:ds 1 
 temp2:ds 1 
-nbBit:ds 1
-    
+nbBit:ds 1  
 Reglage:ds 1 ; variable indiquant en quel mode de reglage on se trouve
 Mode:ds 1   ; variable indiquant le mode dans lequel on est
-
 DHeure:ds 1 ; les dizianes d'heure
 Heure: ds 1 ;les heures
 DMin: ds 1  ; les dizaines de minutes	
 Min: ds 1   ;les minutes
-
+Sec: ds 1
 CDMin: ds 1 ; valeur des temp chrono
 CMin: ds 1
 CDSec: ds 1
 CSec: ds 1
-  
 ADHeure:ds 1 ; L'alarme
 AHeure: ds 1
 ADMin: ds 1  	
@@ -108,8 +105,8 @@ Clignotement: ds 1
 PSECT resetVect,delta=2,class=code    
 
 org 000H        ; vecteur de reset 
-   
     goto main 
+   
 
 org 004H        ; vecteur d'interruption 
     BANKSEL PIR4
@@ -117,6 +114,11 @@ org 004H        ; vecteur d'interruption
     
     BANKSEL TMR1H
     bsf	    TMR1H,7
+    
+    ;; TEST remplace timer par int RC4
+    BANKSEL PIR0
+    bcf	    PIR0,0
+    
     
     BANKSEL LATA
     movlw   00000100B
@@ -139,13 +141,13 @@ main:
     movlw   00000001B
     movwf   Reglage
     
-    movlw   0x00
-    movwf   DHeure
-    movlw   0x09
-    movwf   Heure
     movlw   0x01
+    movwf   DHeure
+    movlw   0x00
+    movwf   Heure
+    movlw   0x00
     movwf   DMin
-    movlw   0x09
+    movlw   0x01
     movwf   Min
     clrf    CDMin
     clrf    CMin
@@ -157,19 +159,24 @@ main:
     clrf    AMin 
     clrf    Clignotement
 boucle:                    ; repère dans le programme 
+    btfss   BMode
+    call    AfficheMode
+    btfsc   BMode
+    call boucle22
+   
+    goto    boucle
+
+boucle22:
     btfsc   Mode,0
     call    Horloge		;si 1er bit de Mode à 1 alors on va dans la boucle heure ext
     btfsc   Mode,1
     call    Chrono
     btfsc   Mode,2
     call    Alarme
-    btfss   BMode
-    call    AfficheMode
-    
-    
-    goto    boucle
+    return
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Heure;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Heure;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;    
+
 Horloge:
     btfsc   Reglage,0	; sil le premier bit de Réglage est à 1 alors on affiche l'heure
     call    afficheHeure
@@ -182,6 +189,7 @@ Horloge:
     btfsc   Reglage,4
     call    ReglageMin
     return
+    
 ReglageDHeure:
     call LecturePotar
     movwf DHeure
@@ -237,6 +245,7 @@ Alarme:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; interuption;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 interuptsec:
     
+    call   incrementationTemps
     btfss  BReglage ;si le bouton set est apuillé
     call   ReglageSet
     btfss  BMode ;si le bouton Mode est apuillé
@@ -246,12 +255,50 @@ interuptsec:
     return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin interuption ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
+incrementationTemps:
+    incf   Sec
+    movf   Sec,W
+    addlw  0xC5
+    btfsc   STATUS,0
+    call    incrementeHMin
+    return
+    
+incrementeHMin:
+    clrf   Sec
+    incf   Min
+    movf   Min,W
+    addlw  0xF8
+    btfsc   STATUS,0
+    call    incrementeHDMin
+    return
+
+incrementeHDMin:
+    clrf   Min
+    incf   DMin
+    movf   DMin,W
+    addlw  0xFB
+    btfsc   STATUS,0
+    call    incrementeHHeure
+    return
+
+incrementeHHeure:
+    clrf   Dmin
+    incf   Heure
+    movf   Heure,W
+    btfsc  DHeure,1
+    addlw  0xFB  
+    btfss  DHeure,1
+    addlw  0xF8
+    btfsc  STATUS,0
+    call   incrementeHDMin
+    return
     
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Reglage et mode;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ModeSet:
-    rlf Mode
-    btfss Mode,3
+    rlf Mode,F
+    bcf	Mode,0
+    btfsc Mode,3
     call ResetMode
     call ResetReglage
     return
@@ -260,14 +307,14 @@ ResetMode:
     movwf   Mode
     return
 ReglageSet:
-    rlf Reglage
-    btfss Reglage,5
+    rlf Reglage,F
+    btfsc Reglage,5
     call ResetReglage
-    btfss Mode,1
+    btfsc Mode,1
     call ModeChronoReglage
     return
 ModeChronoReglage:
-    btfss Reglage,2
+    btfsc Reglage,2
     call ResetReglage 
     return
 ResetReglage:
@@ -275,12 +322,13 @@ ResetReglage:
     movwf   Reglage
     return
 AfficheMode:
-    btfss Mode,0
+    btfsc Mode,0
     call AfficheModeHeure
-    btfss Mode,1
+    btfsc Mode,1
     call AfficheModeChrono
-    btfss Mode,2
+    btfsc Mode,2
     call AfficheModeAlarme
+    return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; fin Réglage et mode ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -351,10 +399,7 @@ AfficheModeAlarme:
     call    setChiffreSeg
      bsf	seg_latch
    bcf	seg_latch
-    movlw   0xFF
-    call tempo
-    movlw   0xFF
-    call tempo
+  
     return
 AfficheModeChrono:
     movlw   00010110B 
@@ -367,10 +412,7 @@ AfficheModeChrono:
     call    setChiffreSeg
      bsf	seg_latch
    bcf	seg_latch
-    movlw   0xFF
-    call tempo
-    movlw   0xFF
-    call tempo
+   
     return
 AfficheModeHeure:
     movlw   00010110B 
@@ -383,10 +425,7 @@ AfficheModeHeure:
     call    setChiffreSeg
      bsf	seg_latch
    bcf	seg_latch
-    movlw   0xFF
-    call tempo
-    movlw   0xFF
-    call tempo
+    
     return
 setChiffreSeg: 
    call table
@@ -509,7 +548,7 @@ initialisation:
     bsf	    TMR1H,7	; Met le compteur Timer1 à 32760
     
     BANKSEL T1CON	
-    movlw   00000101B	; Active le Timer1
+    movlw   00000001B	; Active le Timer1
     movwf   T1CON
     
     BANKSEL T1GCON  
@@ -526,7 +565,19 @@ initialisation:
     BANKSEL INTCON
     movlw   11000000B	; Active les interruptions
     movwf   INTCON
+    
+    ;; TEST remplacer timer par int sur RC4
+    ;BANKSEL PIE0
+    ;bsf	PIE0,0
+    ;bcf	  PIE4,0
+    ;BANKSEL INTPPS
+    ;movlw 00010100B
+    ;movwf INTPPS
+  
+    
+    
     BANKSEL PORTA
+    
     
     return		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin initialisation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
