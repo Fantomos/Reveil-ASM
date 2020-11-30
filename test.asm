@@ -139,13 +139,13 @@ main:
     movlw   00000001B
     movwf   Reglage
     
-    movlw   0x01
+    movlw   0x00
     movwf   DHeure
-    movlw   0x01
+    movlw   0x09
     movwf   Heure
     movlw   0x01
     movwf   DMin
-    movlw   0x01
+    movlw   0x09
     movwf   Min
     clrf    CDMin
     clrf    CMin
@@ -297,6 +297,8 @@ affichechrono:
     call    setChiffreSeg
     movf    CDMin,W
     call    setChiffreSeg
+    bsf	seg_latch
+    bcf	seg_latch
     return
 afficheHeure:
     movf   Min,W 
@@ -307,6 +309,8 @@ afficheHeure:
     call    setChiffreSeg
     movf    DHeure,W
     call    setChiffreSeg
+    bsf	seg_latch
+    bcf	seg_latch
     return
 AfficheHeureCligno:
     movf    Min,W 
@@ -328,6 +332,8 @@ AfficheHeureCligno:
     btfss   Clignotement,3
     movlw   00010110B ;vide
     call    setChiffreSeg
+     bsf	seg_latch
+   bcf	seg_latch
     
     movlw   0xFF
     call tempo
@@ -343,6 +349,8 @@ AfficheModeAlarme:
     call    setChiffreSeg
     movlw   0x0A    ;Lettre A de la table
     call    setChiffreSeg
+     bsf	seg_latch
+   bcf	seg_latch
     movlw   0xFF
     call tempo
     movlw   0xFF
@@ -357,6 +365,8 @@ AfficheModeChrono:
     call    setChiffreSeg
     movlw   0x0B    ;lettre C de la table
     call    setChiffreSeg
+     bsf	seg_latch
+   bcf	seg_latch
     movlw   0xFF
     call tempo
     movlw   0xFF
@@ -371,6 +381,8 @@ AfficheModeHeure:
     call    setChiffreSeg
     movlw   0x0C	;lettre H de la table
     call    setChiffreSeg
+     bsf	seg_latch
+   bcf	seg_latch
     movlw   0xFF
     call tempo
     movlw   0xFF
@@ -393,9 +405,6 @@ setChiffreSeg:
    call setBitSeg
    rlf	WREG,W
    call setBitSeg
-   
-   bsf	seg_latch
-   bcf	seg_latch
    return
 
     
