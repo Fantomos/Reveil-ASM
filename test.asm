@@ -86,7 +86,7 @@ Heure: ds 1 ;les heures
 DMin: ds 1  ; les dizaines de minutes	
 Min: ds 1   ;les minutes
 Sec: ds 1
-CDMin: ds 1 ; valeur des temp chrono
+CDMin: ds 1 ; valeur des temps chrono
 CMin: ds 1
 CDSec: ds 1
 CSec: ds 1
@@ -162,11 +162,10 @@ boucle:                    ; repère dans le programme
     btfss   BMode
     call    AfficheMode
     btfsc   BMode
-    call boucle22
-   
+    call    boucle2
     goto    boucle
 
-boucle22:
+boucle2:
     btfsc   Mode,0
     call    Horloge		;si 1er bit de Mode à 1 alors on va dans la boucle heure ext
     btfsc   Mode,1
@@ -336,31 +335,32 @@ AfficheMode:
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  7 Segement  ;;;;;;;;;;;;;;;;;;;;;;;;;  
-affichechrono:
+affichechrono:	;; Affiche le chronomètre (MM:SS) sur les 7 segments
     movf    CSec,W 
-    call    setChiffreSeg
+    call    setChiffreSeg   ; Envoi l'unité seconde
     movf    CDSec,W
-    call    setChiffreSeg
+    call    setChiffreSeg   ; Envoi la dizaine seconde
     movf    CMin,W
-    call    setChiffreSeg
+    call    setChiffreSeg   ; Envoi l'unité minute
     movf    CDMin,W
-    call    setChiffreSeg
-    bsf	seg_latch
+    call    setChiffreSeg   ; Envoi la dizaine minute
+    bsf	seg_latch	    ; Affiche le résultat
     bcf	seg_latch
     return
-afficheHeure:
+afficheHeure: ;; Affiche l'heure (HH:MM) sur les 7 segments
     movf   Min,W 
-    call    setChiffreSeg
+    call    setChiffreSeg   ; Envoi l'unité seconde
     movf    DMin,W
-    call    setChiffreSeg
+    call    setChiffreSeg   ; Envoi la dizaine seconde
     movf    Heure,W
-    call    setChiffreSeg
+    call    setChiffreSeg   ; Envoi l'unité heure
     movf    DHeure,W
-    call    setChiffreSeg
-    bsf	seg_latch
+    call    setChiffreSeg   ; Envoi la dizaine heure
+    bsf	seg_latch	    ; Affiche le résultat
     bcf	seg_latch
     return
-AfficheHeureCligno:
+    
+AfficheHeureCligno: 
     movf    Min,W 
     btfss   Clignotement,0
     movlw   00010110B ;vide
@@ -381,13 +381,14 @@ AfficheHeureCligno:
     movlw   00010110B ;vide
     call    setChiffreSeg
      bsf	seg_latch
-   bcf	seg_latch
+    bcf	seg_latch
     
     movlw   0xFF
     call tempo
     call afficheHeure
     call tempo
     return
+    
 AfficheModeAlarme:
     movlw   00010110B 
     call    setChiffreSeg
@@ -401,6 +402,7 @@ AfficheModeAlarme:
    bcf	seg_latch
   
     return
+    
 AfficheModeChrono:
     movlw   00010110B 
     call    setChiffreSeg
@@ -412,8 +414,9 @@ AfficheModeChrono:
     call    setChiffreSeg
      bsf	seg_latch
    bcf	seg_latch
-   
+  
     return
+    
 AfficheModeHeure:
     movlw   00010110B 
     call    setChiffreSeg
@@ -427,6 +430,7 @@ AfficheModeHeure:
    bcf	seg_latch
     
     return
+    
 setChiffreSeg: 
    call table
    call setBitSeg
@@ -469,7 +473,8 @@ dataL:
     
     
     
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Potar  ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Potar  ;;;;;;;;;;;;;;;;;;;;;;;;;;;    
+    
 LecturePotar:
    BANKSEL  ADCON0
    bsf	   ADCON0,0
@@ -478,6 +483,7 @@ LecturePotar:
    bcf	   ADCON0,0
    BANKSEL  PORTC
    return
+   
 Comparaison:
     addlw   0x19
     btfsc   STATUS,0
@@ -589,16 +595,16 @@ initialisation:
 tempo:     
     movwf   temp0        ; temp0 = Wreg 
 
-boucle2:     
+tempo2:     
     movlw   249            ; Wreg = 249 
     movwf   temp1        ; temp1= Wreg en C temp1=249 
 
-boucle3:     
+tempo3:     
     nop                ; no opÈration 
     decfsz  temp1,F        ; temp1 = temp1-1, si zero sauter l'instruction suivante 
-    goto    boucle3 
+    goto    tempo3 
     decfsz  temp0,F 
-    goto    boucle2 
+    goto    tempo2 
     return 
  
 table:
