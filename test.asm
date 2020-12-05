@@ -166,8 +166,9 @@ initialisation:
     
     BANKSEL ADCON0
     clrf    ADREF	; congifure tension de réference du ADC
-    movlw   11000001B	
+    movlw   11000000B	
     movwf   ADCON0	; configure le ADC
+    bsf	   ADCON0,0
     
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION TIMER ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL TMR1H	
@@ -377,7 +378,7 @@ Reglage_Min:
      BANKSEL  ADRESH
     movf    ADRESH,W
      BANKSEL  PORTC
-    call  Potar_DMin
+    call  Potar_Min
     btfss   bouton3
     movwf Horloge_Min
     call Affiche_Horloge_Cligno
