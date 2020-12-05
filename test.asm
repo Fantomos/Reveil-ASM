@@ -79,34 +79,31 @@ PSECT  udata_bank0    ; debut de la ram
 temp0:ds 1 
 temp1:ds 1 
 temp2:ds 1 
-nbBit:ds 1  
 Reglage:ds 1 ; variable indiquant en quel mode de reglage on se trouve
 Mode:ds 1   ; variable indiquant le mode dans lequel on est
-DHeure:ds 1 ; les dizianes d'heure
-Heure: ds 1 ;les heures
-DMin: ds 1  ; les dizaines de minutes	
-Min: ds 1   ;les minutes
-Sec: ds 1
-CDMin: ds 1 ; valeur des temps chrono
-CMin: ds 1
-CDSec: ds 1
-CSec: ds 1
-ADHeure:ds 1 ; L'alarme
-AHeure: ds 1
-ADMin: ds 1  	
-AMin: ds 1 
-AlarmeON: ds 1 ;0x33
+Horloge_DHeure:ds 1 ; les dizianes d'heure
+Horloge_Heure: ds 1 ;les heures
+Horloge_DMin: ds 1  ; les dizaines de minutes	
+Horloge_Min: ds 1   ;les minutes
+Horloge_Sec: ds 1
+Chrono_DMin: ds 1 ; valeur des temps chrono
+Chrono_Min: ds 1
+Chrono_DSec: ds 1
+Chrono_Sec: ds 1
+Alarme_DHeure:ds 1 ; L'alarme
+Alarme_Heure: ds 1
+Alarme_DMin: ds 1  	
+Alarme_Min: ds 1 
+Alarme_Active: ds 1 ;0x33
 
 
 ;------------------------------------ 
-
 ;definition des vecteurs de reset et d interruption 
 PSECT resetVect,delta=2,class=code    
 
 org 000H        ; vecteur de reset 
-    goto main 
+    goto initialisation 
    
-
 org 004H        ; vecteur d'interruption 
     BANKSEL PIR4
     bcf	    TMR1F
@@ -120,6 +117,7 @@ org 004H        ; vecteur d'interruption
    ; movwf   TMR1L
     
     ;; TEST remplace timer par int RC4
+    
     BANKSEL PIR0
     bcf	    PIR0,0
     
@@ -127,739 +125,21 @@ org 004H        ; vecteur d'interruption
     BANKSEL LATA
     movlw   00000100B
     xorwf   LATA,F
-    call interuptsec
+    call Interuption_Sec
     BANKSEL PORTC
     retfie 
 ;------------------------------------ 
 
 ;debut du code source     
-PSECT code     
-;programme principal 
-
-main: 
-    call    initialisation        ; appeler le sous programme initialisation 
-    bcf	    seg_clk
-    bcf	   seg_latch
-    ;;;;set les valeurs de temps
-    movlw   00000001B
-    movwf   Mode
-    movlw   00000001B
-    movwf   Reglage
-    
-  
-    movlw   0x01
-    movwf   DHeure
-    movlw   0x08
-    movwf   Heure
-    movlw   0x00
-    movwf   DMin
-    movlw   0x08
-    movwf   Min
-    clrf    CDMin
-    clrf    CMin
-    clrf    CDSec
-    clrf    CSec
-    clrf    ADHeure
-    clrf    AHeure
-    clrf    ADMin 	
-    clrf    AMin 
-    clrf    AlarmeON
-    
-    
-    movlw   0x01
-    movwf   ADHeure
-    movlw   0x08
-    movwf   AHeure
-    movlw   0x00
-    movwf   ADMin
-    movlw   0x09
-    movwf   AMin
-boucle:                    ; repère dans le programme 
-
-    btfss   BMode
-    call    AfficheMode
-    btfsc   BMode
-    call    boucle2
-    goto    boucle
-
-boucle2:
-    btfsc   Mode,0
-    call    Horloge		;si 1er bit de Mode à 1 alors on va dans la boucle heure ext
-    btfsc   Mode,1
-    call    Chrono
-    btfsc   Mode,2
-    call    Alarme
-    return
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Horloge;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;    
-
-Horloge:
-    btfsc   Reglage,0	; sil le premier bit de Réglage est à 1 alors on affiche l'heure
-    call    afficheHeure
-    btfsc   Reglage,1	; sil le second bit de Réglage est à 1 alors on modifie les dizaines d'heures....
-    call    ReglageMin
-    btfsc   Reglage,2
-    call    ReglageDMin
-    btfsc   Reglage,3
-    call    ReglageHeure
-    btfsc   Reglage,4
-    call    ReglageDHeure
-    return
-    
-ReglageDHeure:
-    BANKSEL  ADRESH
-    movf    ADRESH,W
-    BANKSEL  PORTC
-    call ComparaisonDHeure
-    btfss   bouton3
-    movwf DHeure
-    call AfficheHeureCligno
-    return
-    
-ReglageHeure:
-     BANKSEL  ADRESH
-    movf    ADRESH,W
-    BANKSEL  PORTC
-    call ComparaisonHeure
-    btfss   bouton3
-    movwf Heure
-    call AfficheHeureCligno
-    return
-ReglageDMin:
-    BANKSEL  ADRESH
-    movf    ADRESH,W
-     BANKSEL  PORTC
-    call ComparaisonDMin
-    btfss   bouton3
-    movwf DMin
-    call AfficheHeureCligno
-    return
-ReglageMin:
-     BANKSEL  ADRESH
-    movf    ADRESH,W
-     BANKSEL  PORTC
-    call ComparaisonMin
-    btfss   bouton3
-    movwf Min
-    call AfficheHeureCligno
-    return
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Fin Heure ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-    
-    
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Chrono ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-Chrono:
-    call affichechrono
-    btfsc BReglage	; sil le second bit de Réglage est à 1 alors on reset le chrono
-    return
-    clrf    CDMin
-    clrf    CMin
-    clrf    CSec
-    clrf    CDSec
-    return
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  FIN Chrono ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    
-
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Alarme ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-Alarme:
-    btfsc   Reglage,0	; sil le premier bit de Réglage est à 1 alors on affiche l'heure
-    call    Reglage0
-    btfsc   Reglage,1	; sil le second bit de Réglage est à 1 alors on modifie les dizaines d'heures....
-    call    Reglage_Alarme_Min
-    btfsc   Reglage,2
-    call    Reglage_Alarme_DMin
-    btfsc   Reglage,3
-    call    Reglage_Alarme_Heure
-    btfsc   Reglage,4
-    call    Reglage_Alarme_DHeure
-    return
-    
-Reglage0:
-    btfsc   bouton3
-    call    afficheAlarme
-    btfss   bouton3
-    call    AfficheModeAlarme
-    return
-
-Reglage_Alarme_DHeure:
-    BANKSEL  ADRESH
-    movf    ADRESH,W
-    BANKSEL  PORTC
-    call ComparaisonADHeure
-    btfss   bouton3
-    movwf ADHeure
-    call AfficheAlarmeCligno
-    return
-    
-Reglage_Alarme_Heure:
-     BANKSEL  ADRESH
-    movf    ADRESH,W
-    BANKSEL  PORTC
-    call ComparaisonAHeure
-    btfss   bouton3
-    movwf AHeure
-    call AfficheAlarmeCligno
-    return
-    
-Reglage_Alarme_DMin:
-    BANKSEL  ADRESH
-    movf    ADRESH,W
-     BANKSEL  PORTC
-    call ComparaisonDMin
-    btfss   bouton3
-    movwf ADMin
-    call AfficheAlarmeCligno
-    return
-    
-Reglage_Alarme_Min:
-     BANKSEL  ADRESH
-    movf    ADRESH,W
-     BANKSEL  PORTC
-    call ComparaisonMin
-    btfss   bouton3
-    movwf AMin
-    call AfficheAlarmeCligno
-    return
-    
- checkAlarme:
-    movf    ADHeure,W
-    subwf   DHeure,W
-    incf    WREG
-    decfsz  WREG
-    return
-    movf    AHeure,W
-    subwf   Heure,W
-    incf    WREG
-    decfsz  WREG
-    return
-    movf    ADMin,W
-    subwf   DMin,W
-    incf    WREG
-    decfsz  WREG
-    return
-    movf    AMin,W
-    subwf   Min,W
-    incf    WREG
-    decfsz  WREG
-    return
-    movf    Sec,W
-    decfsz  WREG
-    return
-    btfss   AlarmeON,0
-    return
-    bsf	   buzzer
-    return
-    
- SetAlarmeON:
-    movlw   00000001B
-    btfss   bouton3
-    xorwf   AlarmeON,F
-    return
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; interuption;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-interuptsec:
-    
-    call   incrementationHSec
-    call   incrementeCSec
-    call   checkAlarme
-    
-    btfss  BReglage ;si le bouton set est apuillé
-    call   ReglageSet
-    btfss  BMode ;si le bouton Mode est apuillé
-    call   ModeSet
-    
-    btfsc  Reglage,0
-    call   SetAlarmeON
-    
-    
-    return
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin interuption ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Incrémentation de l'horloge ;;;;;;;;;;;;;;;;;;;;
-incrementationHSec:
-    incf   Sec
-    movf   Sec,W
-    addlw  0xC5
-    btfsc   STATUS,0
-    call    incrementeHMin
-    return
-    
-incrementeHMin:
-    clrf   Sec
-    incf   Min
-    movf   Min,W
-    addlw  0xF6
-    btfsc   STATUS,0
-    call    incrementeHDMin
-    return
-
-incrementeHDMin:
-    clrf   Min
-    incf   DMin
-    movf   DMin,W
-    addlw  0xFA
-    btfsc   STATUS,0
-    call    incrementeHHeure
-    return
-
-incrementeHHeure:
-    clrf   DMin
-    incf   Heure
-    movf   Heure,W
-    btfss  DHeure,1
-    call   incrementeHDHeure
-    btfsc  DHeure,1
-    call  resetHHeure
-    return
-
-incrementeHDHeure:
-    addlw  0xF6
-    btfsc  STATUS,0
-    call   incrementeEtClearDHeure
-    return
-    
-incrementeEtClearDHeure:
-    incf    DHeure
-    clrf    Heure
-    return
-    
-resetHHeure:
-    addlw  0xFC
-    btfsc  STATUS,0
-    call   clearDHeure
-    return
-
-clearDHeure:
-    clrf   DHeure
-    clrf   Heure
-    return
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin Incrémentation de l'horloge ;;;;;;;;;;;;;;;;;;;;
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Incrémentation du chronometre  ;;;;;;;;;;;;;;;;;;;;
-    
- incrementeCSec:
-    incf   CSec
-    movf   CSec,W
-    addlw  0xF6
-    btfsc   STATUS,0
-    call    incrementeCDSec
-    return
-    
-incrementeCDSec:
-    clrf    CSec
-    incf   CDSec
-    movf   CDSec,W
-    addlw  0xFA
-    btfsc   STATUS,0
-    call    incrementeCMin
-    return
-    
-incrementeCMin:
-    clrf   CDSec
-    incf   CMin
-    movf   CMin,W
-    addlw  0xF6
-    btfsc   STATUS,0
-    call    incrementeCDMin
-    return
-
-incrementeCDMin:
-    clrf   CMin
-    incf   CDMin
-    movf   CDMin,W
-    addlw  0xF6
-    btfsc   STATUS,0
-    clrf    CDMin
-    return
-    
-    
-    
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin Incrémentation du chronometre  ;;;;;;;;;;;;;;;;;;;;
-    
-    
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Reglage et mode;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ModeSet:
-    rlf Mode,F
-    bcf	Mode,0
-    btfsc Mode,3
-    call ResetMode
-    call ResetReglage
-    return
-ResetMode:
-    movlw   0x01
-    movwf   Mode
-    return
-ReglageSet:
-    bcf STATUS,0
-    rlf Reglage,F
-    btfsc Reglage,5
-    call ResetReglage
-    return
-
-ResetReglage:
-    movlw   0x01
-    movwf   Reglage
-    return
-    
-AfficheMode:
-    bcf	  buzzer
-    btfsc Mode,0
-    call AfficheModeHeure
-    btfsc Mode,1
-    call AfficheModeChrono
-    btfsc Mode,2
-    call AfficheModeAlarme
-    return
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; fin Réglage et mode ;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  7 Segement  ;;;;;;;;;;;;;;;;;;;;;;;;;  
-affichechrono:	;; Affiche le chronomètre (MM:SS) sur les 7 segments
-    movf    CSec,W 
-    call    setChiffreSeg   ; Envoi l'unité seconde
-    movf    CDSec,W
-    call    setChiffreSeg   ; Envoi la dizaine seconde
-    movf    CMin,W
-    call    setChiffreSeg   ; Envoi l'unité minute
-    movf    CDMin,W
-    call    setChiffreSeg   ; Envoi la dizaine minute
-    bsf	seg_latch	    ; Affiche le résultat
-    bcf	seg_latch
-    return
-afficheHeure: ;; Affiche l'heure (HH:MM) sur les 7 segments
-    movf   Min,W 
-    call    setChiffreSeg   ; Envoi l'unité seconde
-    movf    DMin,W
-    call    setChiffreSeg   ; Envoi la dizaine seconde
-    movf    Heure,W
-    call    setChiffreSeg   ; Envoi l'unité heure
-    movf    DHeure,W
-    call    setChiffreSeg   ; Envoi la dizaine heure
-    bsf	seg_latch	    ; Affiche le résultat
-    bcf	seg_latch
-    return
-
-    
-afficheAlarme: ;; Affiche l'alarme (HH:MM) sur les 7 segments
-    movf   AMin,W 
-    call    setChiffreSeg   ; Envoi l'unité seconde
-    movf    ADMin,W
-    call    setChiffreSeg   ; Envoi la dizaine seconde
-    movf    AHeure,W
-    call    setChiffreSeg   ; Envoi l'unité heure
-    movf    ADHeure,W
-    call    setChiffreSeg   ; Envoi la dizaine heure
-    bsf	seg_latch	    ; Affiche le résultat
-    bcf	seg_latch
-    return
-    
-AfficheHeureCligno: 
-    movf    Min,W 
-    btfsc   Reglage,1
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    nop
-    movf    DMin,W 
-    btfsc   Reglage,2
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    
-    movf    Heure,W 
-    btfsc   Reglage,3
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    
-    movf    DHeure,W 
-    btfsc   Reglage,4
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    
-    bsf	seg_latch
-    bcf	seg_latch
-    
-    movlw   0x10
-    call tempo
-    call afficheHeure
-    movlw   0x40
-    call tempo
-    return
-    
-AfficheAlarmeCligno: 
-    movf    AMin,W 
-    btfsc   Reglage,1
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    nop
-    movf    ADMin,W 
-    btfsc   Reglage,2
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    
-    movf    AHeure,W 
-    btfsc   Reglage,3
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    
-    movf    ADHeure,W 
-    btfsc   Reglage,4
-    movlw   00010110B ;vide
-    call    setChiffreSeg
-    
-    bsf	seg_latch
-    bcf	seg_latch
-    
-    movlw   0x10
-    call tempo
-    call afficheAlarme
-    movlw   0x40
-    call tempo
-    return
-    
-    
-AfficheModeAlarme:
-    movlw   00010110B 
-    call    setChiffreSeg
-    movlw   00010110B
-    call    setChiffreSeg
-    btfsc   AlarmeON,0
-    movlw   0x01
-    btfss   AlarmeON,0
-    movlw   0x00
-    call    setChiffreSeg
-    movlw   0x0A    ;Lettre A de la table
-    call    setChiffreSeg
-     bsf	seg_latch
-   bcf	seg_latch
-  
-    return
-    
-AfficheModeChrono:
-    movlw   00010110B 
-    call    setChiffreSeg
-    movlw   00010110B
-    call    setChiffreSeg
-    movlw   00010110B
-    call    setChiffreSeg
-    movlw   0x0B    ;lettre C de la table
-    call    setChiffreSeg
-     bsf	seg_latch
-   bcf	seg_latch
-  
-    return
-    
-AfficheModeHeure:
-    movlw   00010110B 
-    call    setChiffreSeg
-    movlw   00010110B
-    call    setChiffreSeg
-    movlw   00010110B
-    call    setChiffreSeg
-    movlw   0x0C	;lettre H de la table
-    call    setChiffreSeg
-     bsf	seg_latch
-   bcf	seg_latch
-    
-    return
-    
-setChiffreSeg: 
-   call table
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   rlf	WREG,W
-   call setBitSeg
-   return
-
-    
-setBitSeg:
-    btfss WREG,7
-    call dataL
-    btfsc WREG,7
-    call dataH
-    return
-    
-dataH:
-    bsf	    seg_data
-    bsf	    seg_clk
-    bcf	    seg_clk
-    return
-    
-dataL:
-    bcf	    seg_data
-    bsf	    seg_clk
-    bcf	    seg_clk
-    return
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  Fin 7 SEG  ;;;;;;;;;;;;;;;;;;;;;;;; 
-    
-    
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Potar  ;;;;;;;;;;;;;;;;;;;;;;;;;;;      
-   
-ComparaisonDHeure:
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x00
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x01
-    movf    Heure,W
-    addlw   0xFC
-    btfsc   STATUS,0  
-    retlw   0x01
-    retlw   0x02
-    return
-    
-ComparaisonHeure:  
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x00
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x01
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x02
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x03
-    btfsc   DHeure,1
-    retlw   0x03
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x04
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x05
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x06
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x07
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x08
-    retlw   0x09
-    return
-    
-    ComparaisonDMin:
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x00
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x01
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x02
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x03
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x04
-    retlw   0x05
-    return
-    
-    ComparaisonMin:
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x00
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x01
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x02
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x03
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x04
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x05
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x06
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x07
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x08
-    retlw   0x09
-    return
-    
-    
-ComparaisonADHeure:
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x00
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x01
-    movf    AHeure,W
-    addlw   0xFC
-    btfsc   STATUS,0  
-    retlw   0x01
-    retlw   0x02
-    return
-    
-ComparaisonAHeure:  
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x00
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x01
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x02
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x03
-    btfsc   ADHeure,1
-    retlw   0x03
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x04
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x05
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x06
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x07
-    addlw   0x19
-    btfsc   STATUS,0
-    retlw   0x08
-    retlw   0x09
-    return
-    
-   
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin Potar ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   
- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Initialisation;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+PSECT code      
+ 
+     
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INITIALISATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ 
 initialisation: 
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION I/O ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL PORTA
     clrf    PORTA	; efface les PORTA, B et C
     clrf    PORTB
@@ -879,77 +159,678 @@ initialisation:
     movlw   11010000B	; configure les boutons en pull-up
     movwf   WPUC
     
-    
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION ADC ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL ADPCH
     movlw   010000B	
     movwf   ADPCH	; configure le ADC sur le port RC0
+    
     BANKSEL ADCON0
     clrf    ADREF	; congifure tension de réference du ADC
     movlw   11000001B	
-    bsf	    ADCON0,0
     movwf   ADCON0	; configure le ADC
     
-      BANKSEL  ADCON0
-   bsf	   ADCON0,0
-    
-    ; CONFIGURATION TIMER 
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION TIMER ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL TMR1H	
-    bsf	    TMR1H,7	; Met le compteur Timer1 à 32760    
+    bsf	    TMR1H,7	; Met le compteur Timer1 à 32760 pour déclencher l'interruption dans 1 sec   
     
     BANKSEL T1CON	
     movlw   00000001B	; Active le Timer1
     movwf   T1CON
-    
+
     BANKSEL T1GCON  
     clrf   T1GCON
     
     BANKSEL T1CLK
     movlw   00000111B	; Selectionne le quartz externe comme source pour Timer1
     movwf   T1CLK
-    
  
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION INTERRUPTION ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL PIE4
     bsf PIE4,0		; Active l'interruption de Timer1
     
     BANKSEL INTCON
     movlw   11000000B	; Active les interruptions
     movwf   INTCON
-    
-    ;; TEST remplacer timer par int sur RC4
-    ;BANKSEL PIE0
-    ;bsf	PIE0,0
-    ;bcf	  PIE4,0
-    ;BANKSEL INTPPS
-    ;movlw 00010100B
-    ;movwf INTPPS
-  
-    
-    
+   
     BANKSEL PORTA
     
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;; INITIALISATION VARIABLES ;;;;;;;;;;;;;;;;;;;;;;;;;
+    bcf	   seg_clk
+    bcf	   seg_latch
+  
+    ;; Affiche mode horloge et pas de réglage
+    movlw   00000001B
+    movwf   Mode
+    movlw   00000001B
+    movwf   Reglage
     
-    return		
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin initialisation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; Initialise toutes les variables à 0
+    clrf    Chrono_DMin
+    clrf    Chrono_Min
+    clrf    Chrono_DSec
+    clrf    Chrono_Sec
+    clrf    Alarme_DHeure
+    clrf    Alarme_Heure
+    clrf    Alarme_DMin 	
+    clrf    Alarme_Min 
+    clrf    Alarme_Active
+  
+    ;; Met à jour l'heure
+    movlw   0x01
+    movwf   Horloge_DHeure
+    movlw   0x08
+    movwf   Horloge_Heure
+    movlw   0x00
+    movwf   Horloge_DMin
+    movlw   0x08
+    movwf   Horloge_Min
+       
+    ;; Met à jour l'alarme
+    movlw   0x01
+    movwf   Alarme_DHeure
+    movlw   0x08
+    movwf   Alarme_Heure
+    movlw   0x00
+    movwf   Alarme_DMin
+    movlw   0x09
+    movwf   Alarme_Min
+       
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INITIALISATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; BOUCLE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+boucle:                   
+    btfss   BMode
+    call    Affiche_Mode
+    btfsc   BMode
+    call    Selection_Mode
+    goto    boucle
+
+Selection_Mode:	;; Affiche le mode selectionné
+    btfsc   Mode,0
+    call    Horloge	;1er bit à 1 donc Horloge
+    btfsc   Mode,1
+    call    Chrono	;2eme bit à 1 donc Chrono
+    btfsc   Mode,2
+    call    Alarme	;3eme bit à 1 donc Alarme
+    return
+
+        
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN BOUCLE ;;;;;;;;;;;;;;;;;;;;;;;;;;;; ;;;  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+       
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; HORLOGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+Horloge:
+    btfsc   Reglage,0	; sil le premier bit de Réglage est à 1 alors on affiche l'heure
+    call    Affiche_Horloge
+    btfsc   Reglage,1	; sil le second bit de Réglage est à 1 alors on modifie les dizaines d'heures....
+    call    Reglage_Min
+    btfsc   Reglage,2
+    call    Reglage_DMin
+    btfsc   Reglage,3
+    call    Reglage_Heure
+    btfsc   Reglage,4
+    call    Reglage_DHeure
+    return
 
     
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INCREMENTATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Incremente_Horloge_Sec:
+    incf   Horloge_Sec
+    movf   Horloge_Sec,W
+    addlw  0xC5
+    btfsc   STATUS,0
+    call    Incremente_Horloge_Min
+    return
+    
+Incremente_Horloge_Min:
+    clrf   Horloge_Sec
+    incf   Horloge_Min
+    movf   Horloge_Min,W
+    addlw  0xF6
+    btfsc   STATUS,0
+    call    Incremente_Horloge_DMin
+    return
+
+Incremente_Horloge_DMin:
+    clrf   Horloge_Min
+    incf   Horloge_DMin
+    movf   Horloge_DMin,W
+    addlw  0xFA
+    btfsc   STATUS,0
+    call    Incremente_Horloge_Heure
+    return
+
+Incremente_Horloge_Heure:
+    clrf   Horloge_DMin
+    incf   Horloge_Heure
+    movf   Horloge_Heure,W
+    btfss  Horloge_DHeure,1
+    call   Test_Horloge_DHeure
+    btfsc  Horloge_DHeure,1
+    call    Test_reset_Horloge_Heure
+    return
+
+Test_Horloge_DHeure:
+    addlw  0xF6
+    btfsc  STATUS,0
+    call   Incremente_Horloge_DHeure
+    return
+    
+Incremente_Horloge_DHeure:
+    incf    Horloge_DHeure
+    clrf    Horloge_Heure
+    return
+    
+Test_reset_Horloge_Heure:
+    addlw  0xFC
+    btfsc  STATUS,0
+    call   Reset_Horloge_Heure
+    return
+
+Reset_Horloge_Heure:
+    clrf   Horloge_DHeure
+    clrf   Horloge_Heure
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INCREMENTATION ;;;;;;;;;;;;;;;;;;;;;;;;;;
     
     
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Tempo;;;;;;;;;;;;;;;;;;;;;;;;    
-tempo:     
-    movwf   temp0        ; temp0 = Wreg 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Reglage_DHeure:
+    BANKSEL  ADRESH
+    movf    ADRESH,W
+    BANKSEL  PORTC
+    call Potar_Horloge_DHeure
+    btfss   bouton3
+    movwf Horloge_DHeure
+    call Affiche_Horloge_Cligno
+    return
+    
+Reglage_Heure:
+     BANKSEL  ADRESH
+    movf    ADRESH,W
+    BANKSEL  PORTC
+    call Potar_Horloge_Heure
+    btfss   bouton3
+    movwf Horloge_Heure
+    call Affiche_Horloge_Cligno
+    return
+Reglage_DMin:
+    BANKSEL  ADRESH
+    movf    ADRESH,W
+     BANKSEL  PORTC
+    call Potar_DMin
+    btfss   bouton3
+    movwf Horloge_DMin
+    call Affiche_Horloge_Cligno
+    return
+Reglage_Min:
+     BANKSEL  ADRESH
+    movf    ADRESH,W
+     BANKSEL  PORTC
+    call  Potar_DMin
+    btfss   bouton3
+    movwf Horloge_Min
+    call Affiche_Horloge_Cligno
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+Affiche_Horloge: ;; Affiche l'heure (HH:MM) sur les 7 segments
+    movf    Horloge_Min,W 
+    call    SetChiffreSeg   ; Envoi l'unité seconde
+    movf    Horloge_DMin,W
+    call    SetChiffreSeg   ; Envoi la dizaine seconde
+    movf    Horloge_Heure,W
+    call    SetChiffreSeg   ; Envoi l'unité heure
+    movf    Horloge_DHeure,W
+    call    SetChiffreSeg   ; Envoi la dizaine heure
+    bsf	seg_latch	    ; Affiche le résultat
+    bcf	seg_latch
+    return
 
-tempo2:     
-    movlw   249            ; Wreg = 249 
-    movwf   temp1        ; temp1= Wreg en C temp1=249 
-
-tempo3:     
-    nop                ; no opÈration 
-    decfsz  temp1,F        ; temp1 = temp1-1, si zero sauter l'instruction suivante 
-    goto    tempo3 
-    decfsz  temp0,F 
-    goto    tempo2 
-    return 
+Affiche_Horloge_Cligno: 
+    movf    Horloge_Min,W 
+    btfsc   Reglage,1
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    nop
+    movf    Horloge_DMin,W 
+    btfsc   Reglage,2
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    
+    movf    Horloge_Heure,W 
+    btfsc   Reglage,3
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    
+    movf    Horloge_DHeure,W 
+    btfsc   Reglage,4
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    
+    bsf	seg_latch
+    bcf	seg_latch
+    
+    movlw   0x10
+    call tempo
+    call Affiche_Horloge
+    movlw   0x40
+    call tempo
+    return
  
+  
+Affiche_Mode_Horloge:
+    movlw   00010110B 
+    call    SetChiffreSeg
+    movlw   00010110B
+    call    SetChiffreSeg
+    movlw   00010110B
+    call    SetChiffreSeg
+    movlw   0x0C	;lettre H de la table
+    call    SetChiffreSeg
+     bsf	seg_latch
+   bcf	seg_latch
+    
+    return
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;     
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN HORLOGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; CHRONO ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+Chrono:
+    call Affiche_Chrono
+    btfsc BReglage	; sil le second bit de Réglage est à 1 alors on reset le chrono
+    return
+    clrf     Chrono_DMin
+    clrf     Chrono_Min
+    clrf     Chrono_Sec
+    clrf     Chrono_DSec
+    return
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INCREMENTATION  ;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+Incremente_Chrono_Sec:
+    incf   Chrono_Sec
+    movf   Chrono_Sec,W
+    addlw  0xF6
+    btfsc   STATUS,0
+    call    Incremente_Chrono_DSec
+    return
+    
+Incremente_Chrono_DSec:
+    clrf    Chrono_Sec
+    incf   Chrono_DSec
+    movf   Chrono_DSec,W
+    addlw  0xFA
+    btfsc   STATUS,0
+    call    Incremente_Chrono_Min
+    return
+    
+Incremente_Chrono_Min:
+    clrf   Chrono_DSec
+    incf   Chrono_Min
+    movf   Chrono_Min,W
+    addlw  0xF6
+    btfsc   STATUS,0
+    call    Incremente_Chrono_DMin
+    return
+
+Incremente_Chrono_DMin:
+    clrf   Chrono_Min
+    incf   Chrono_DMin
+    movf   Chrono_DMin,W
+    addlw  0xF6
+    btfsc   STATUS,0
+    clrf    Chrono_DMin
+    return
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INCREMENTATION  ;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Affiche_Chrono:		    ;; Affiche le chronomètre (MM:SS) sur les 7 segments
+    movf    Chrono_Sec,W 
+    call    SetChiffreSeg   ; Envoi l'unité seconde
+    movf    Chrono_DSec,W
+    call    SetChiffreSeg   ; Envoi la dizaine seconde
+    movf    Chrono_Min,W
+    call    SetChiffreSeg   ; Envoi l'unité minute
+    movf    Chrono_DMin,W
+    call    SetChiffreSeg   ; Envoi la dizaine minute
+    bsf	seg_latch	    ; Affiche le résultat
+    bcf	seg_latch
+    return   
+    
+Affiche_Mode_Chrono:
+    movlw   00010110B 
+    call    SetChiffreSeg
+    movlw   00010110B
+    call    SetChiffreSeg
+    movlw   00010110B
+    call    SetChiffreSeg
+    movlw   0x0B    ;lettre C de la table
+    call    SetChiffreSeg
+    bsf	seg_latch
+    bcf	seg_latch
+    return    
+    
+   
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN AFFICHAGE  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN CHRONO ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; ALARME ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ 
+Alarme:
+    btfsc   Reglage,0	; Si 1er bit à 1 alors aucun reglage
+    call    Reglage_Alarme_Aucun
+    btfsc   Reglage,1	; Si 2ème bit à 1 alors réglage Min
+    call    Reglage_Alarme_Min
+    btfsc   Reglage,2	; Si 3ème bit à 1 alors réglage DMin
+    call    Reglage_Alarme_DMin
+    btfsc   Reglage,3	; Si 4ème bit à 1 alors réglage Heure
+    call    Reglage_Alarme_Heure
+    btfsc   Reglage,4	; Si 5ème bit à 1 alors réglage DHeure
+    call    Reglage_Alarme_DHeure
+    return
+
+ Test_Alarme:
+    movf    Alarme_DHeure,W
+    subwf   Horloge_DHeure,W
+    incf    WREG
+    decfsz  WREG
+    return
+    movf    Alarme_Heure,W
+    subwf   Horloge_Heure,W
+    incf    WREG
+    decfsz  WREG
+    return
+    movf    Alarme_DMin,W
+    subwf   Horloge_DMin,W
+    incf    WREG
+    decfsz  WREG
+    return
+    movf    Alarme_Min,W
+    subwf   Horloge_Min,W
+    incf    WREG
+    decfsz  WREG
+    return
+    movf    Horloge_Sec,W
+    decfsz  WREG
+    return
+    btfss   Alarme_Active,0
+    return
+    bsf	   buzzer
+    return
+    
+ Toggle_Alarme:
+    movlw   00000001B
+    btfss   bouton3
+    xorwf   Alarme_Active,F
+    return
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; REGLAGE  ;;;;;;;;;;;;;;;;;;;;;;;;;
+Reglage_Alarme_Aucun:
+    btfsc   bouton3
+    call    Affiche_Alarme
+    btfss   bouton3
+    call    Affiche_Mode_Alarme
+    return
+
+Reglage_Alarme_DHeure:
+    BANKSEL  ADRESH
+    movf    ADRESH,W
+    BANKSEL  PORTC
+    call Potar_Alarme_DHeure
+    btfss   bouton3
+    movwf Alarme_DHeure
+    call Affiche_Alarme_Cligno
+    return
+    
+Reglage_Alarme_Heure:
+     BANKSEL  ADRESH
+    movf    ADRESH,W
+    BANKSEL  PORTC
+    call Potar_Alarme_Heure
+    btfss   bouton3
+    movwf Alarme_Heure
+    call Affiche_Alarme_Cligno
+    return
+    
+Reglage_Alarme_DMin:
+    BANKSEL  ADRESH
+    movf    ADRESH,W
+     BANKSEL  PORTC
+    call Potar_DMin
+    btfss   bouton3
+    movwf Alarme_DMin
+    call Affiche_Alarme_Cligno
+    return
+    
+Reglage_Alarme_Min:
+     BANKSEL  ADRESH
+    movf    ADRESH,W
+     BANKSEL  PORTC
+    call Potar_Min
+    btfss   bouton3
+    movwf Alarme_Min
+    call Affiche_Alarme_Cligno
+    return
+ 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN REGLAGE  ;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+    
+       
+Affiche_Alarme: ;; Affiche l'alarme (HH:MM) sur les 7 segments
+    movf   Alarme_Min,W 
+    call    SetChiffreSeg   ; Envoi l'unité seconde
+    movf    Alarme_DMin,W
+    call    SetChiffreSeg   ; Envoi la dizaine seconde
+    movf    Alarme_Heure,W
+    call    SetChiffreSeg   ; Envoi l'unité heure
+    movf    Alarme_DHeure,W
+    call    SetChiffreSeg   ; Envoi la dizaine heure
+    bsf	seg_latch	    ; Affiche le résultat
+    bcf	seg_latch
+    return
+    
+
+    
+Affiche_Alarme_Cligno: 
+    movf    Alarme_Min,W 
+    btfsc   Reglage,1
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    nop
+    movf    Alarme_DMin,W 
+    btfsc   Reglage,2
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    
+    movf    Alarme_Heure,W 
+    btfsc   Reglage,3
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    
+    movf    Alarme_DHeure,W 
+    btfsc   Reglage,4
+    movlw   00010110B ;vide
+    call    SetChiffreSeg
+    
+    bsf	seg_latch
+    bcf	seg_latch
+    
+    movlw   0x10
+    call tempo
+    call Affiche_Alarme
+    movlw   0x40
+    call tempo
+    return
+    
+       
+Affiche_Mode_Alarme:
+    movlw   00010110B 
+    call    SetChiffreSeg
+    movlw   00010110B
+    call    SetChiffreSeg
+    btfsc   Alarme_Active,0
+    movlw   0x01
+    btfss   Alarme_Active,0
+    movlw   0x00
+    call    SetChiffreSeg
+    movlw   0x0A    ;Lettre A de la table
+    call    SetChiffreSeg
+     bsf	seg_latch
+   bcf	seg_latch
+  
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN ALARME ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; interuption;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Interuption_Sec:
+    
+    call   Incremente_Horloge_Sec
+    call   Incremente_Chrono_Sec
+    call   Test_Alarme
+    
+    btfss  BReglage ;si le bouton set est apuillé
+    call   ReglageSet
+    btfss  BMode ;si le bouton Mode est apuillé
+    call   ModeSet
+    
+    btfsc  Reglage,0
+    call   Toggle_Alarme
+    
+    
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin interuption ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+
+    
+
+    
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT MODE ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+ModeSet:
+    rlf Mode,F
+    bcf	Mode,0
+    btfsc Mode,3
+    call ResetMode
+    call ResetReglage
+    return
+ResetMode:
+    movlw   0x01
+    movwf   Mode
+    return
+
+Affiche_Mode:
+    bcf	  buzzer
+    btfsc Mode,0
+    call Affiche_Mode_Horloge
+    btfsc Mode,1
+    call Affiche_Mode_Chrono
+    btfsc Mode,2
+    call Affiche_Mode_Alarme
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; FIN CHANGEMENT MODE ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ReglageSet:
+    bcf STATUS,0
+    rlf Reglage,F
+    btfsc Reglage,5
+    call ResetReglage
+    return
+
+ResetReglage:
+    movlw   0x01
+    movwf   Reglage
+    return
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; FIN CHANGEMENT REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; REGISTRES 7 SEGMENTS ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+SetChiffreSeg: 
+   call table
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   rlf	WREG,W
+   call SetBitSeg
+   return
+
+    
+SetBitSeg:
+    btfss WREG,7
+    call DataL
+    btfsc WREG,7
+    call DataH
+    return
+    
+DataH:
+    bsf	    seg_data
+    bsf	    seg_clk
+    bcf	    seg_clk
+    return
+    
+DataL:
+    bcf	    seg_data
+    bsf	    seg_clk
+    bcf	    seg_clk
+    return
+    
 table:
     brw
     retlw   01111110B ;0   0
@@ -976,6 +857,188 @@ table:
     retlw   11011110B	   ;    21
     retlw   00000000B	   ;Vide 22
     
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; FIN REGISTRES 7 SEGMENTS ;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
+    
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; LECTURE POTAR  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;     
+   
+Potar_Horloge_DHeure:
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    movf    Horloge_Heure,W
+    addlw   0xFC
+    btfsc   STATUS,0  
+    retlw   0x01
+    retlw   0x02
+    return
+    
+Potar_Horloge_Heure:  
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x02
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x03
+    btfsc   Horloge_DHeure,1
+    retlw   0x03
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x04
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x05
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x06
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x07
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x08
+    retlw   0x09
+    return
+    
+Potar_DMin:
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x02
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x03
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x04
+    retlw   0x05
+    return
+    
+Potar_Min:
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x02
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x03
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x04
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x05
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x06
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x07
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x08
+    retlw   0x09
+    return
+    
+    
+Potar_Alarme_DHeure:
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    movf    Alarme_Heure,W
+    addlw   0xFC
+    btfsc   STATUS,0  
+    retlw   0x01
+    retlw   0x02
+    return
+    
+Potar_Alarme_Heure:  
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x00
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x01
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x02
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x03
+    btfsc   Alarme_DHeure,1
+    retlw   0x03
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x04
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x05
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x06
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x07
+    addlw   0x19
+    btfsc   STATUS,0
+    retlw   0x08
+    retlw   0x09
+    return
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; FIN LECTURE POTAR  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+   
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; TEMPO  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+     
+tempo:     
+    movwf   temp0        ; temp0 = Wreg 
+
+tempo2:     
+    movlw   249            ; Wreg = 249 
+    movwf   temp1        ; temp1= Wreg en C temp1=249 
+
+tempo3:     
+    nop                ; no opÈration 
+    decfsz  temp1,F        ; temp1 = temp1-1, si zero sauter l'instruction suivante 
+    goto    tempo3 
+    decfsz  temp0,F 
+    goto    tempo2 
+    return 
+     
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;; FIN TEMPO  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+      
     
     end        ; fin du code source 
 
