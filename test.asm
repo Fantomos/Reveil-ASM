@@ -1,9 +1,3 @@
-;------------------------------------ 
-; 
-; la led est sur la broche RA2 elle est active à 0 
-; un bouton poussoir est disposé sur la broche RC2     
-;------------------------------------ 
-
 ; dÈfinition du processeur 
 PROCESSOR 16f18446 
 #include <xc.inc> 
@@ -61,17 +55,17 @@ config CP = OFF         // UserNVM Program memory code protection bit (UserNVM c
 
 ;------------------------------------ 
 ;assignation des port du pic 
-#define BMode	PORTC,7 
-#define BReglage    PORTC,6 
-#define bouton3	PORTC,4
-#define potar	PORTC,0
-#define led	LATA,2 
-#define seg_clk LATC,1 ;SCK
-#define seg_data LATC,2 ;SD1
-#define seg_latch LATC,3 ;LT
-#define buzzer LATC,5    
-#define	TMR1F	PIR4,0
-#define GIE	INTCON,7
+#define BMode	PORTC,7  ; Bouton de selection de mode
+#define BReglage    PORTC,6  ; Bouton de selection de reglage
+#define validation	PORTC,4  ; Bouton de validation
+#define potar	PORTC,0 ; Potentiomètre de sélèction de chiffre
+#define led	LATA,2 ; Led fréquence de 1 Hz
+#define seg_clk LATC,1 ;SCK Horloge 7 segments
+#define seg_data LATC,2 ;SD1 Données 7 segments
+#define seg_latch LATC,3 ;LT Validation 7 segments
+#define buzzer LATC,5    ; Buzzer d'alarme
+#define	TMR1F	PIR4,0	  ; Flag du Timer
+#define GIE	INTCON,7    ; Activation des itnerruptions
 ;------------------------------------ 
 
 ;definition des variables 
@@ -79,23 +73,23 @@ PSECT  udata_bank0    ; debut de la ram
 temp0:ds 1 
 temp1:ds 1 
 temp2:ds 1 
-Reglage:ds 1 ; variable indiquant en quel mode de reglage on se trouve
-Mode:ds 1   ; variable indiquant le mode dans lequel on est
-Horloge_DHeure:ds 1 ; les dizianes d'heure
-Horloge_Heure: ds 1 ;les heures
-Horloge_DMin: ds 1  ; les dizaines de minutes	
-Horloge_Min: ds 1   ;les minutes
-Horloge_Sec: ds 1
-Chrono_DMin: ds 1 ; valeur des temps chrono
-Chrono_Min: ds 1
-Chrono_DSec: ds 1
-Chrono_Sec: ds 1
-Alarme_DHeure:ds 1 ; L'alarme
-Alarme_Heure: ds 1
-Alarme_DMin: ds 1  	
-Alarme_Min: ds 1 
-Alarme_Active: ds 1 ;0x33
-
+Reglage:ds 1 ; Type de reglage
+Mode:ds 1   ;  Mode affiché
+Horloge_DHeure:ds 1 ; Horloge Dizianes d'heure
+Horloge_Heure: ds 1 ; Horloge Heures
+Horloge_DMin: ds 1  ; Horloge Dizaines de minutes	
+Horloge_Min: ds 1   ; Horloge Minutes
+Horloge_Sec: ds 1   ; Horloge Secondes
+Chrono_DMin: ds 1 ; Chrono Dizianes d'heure
+Chrono_Min: ds 1    ; Chrono Minutes
+Chrono_DSec: ds 1   ; Chrono Dizaines Secondes
+Chrono_Sec: ds 1    ; Chrono Secondes
+Alarme_DHeure:ds 1 ; Alarme Dizaines d'heures
+Alarme_Heure: ds 1 ; Alarme Heures
+Alarme_DMin: ds 1 ; Alarme Dizaines Minutes
+Alarme_Min: ds 1 ; Alarme Minutes
+Alarme_Active: ds 1 ;Activation Alarme
+Timer_cancel: ds 1 ; 
 
 ;------------------------------------ 
 ;definition des vecteurs de reset et d interruption 
@@ -110,22 +104,14 @@ org 004H        ; vecteur d'interruption
     
     BANKSEL TMR1H	
     bsf	    TMR1H,7	; Règle le compteur sur une seconde	
-  ; movlw   11111111B ; Test pour accelerer le temps
-   ; movwf   TMR1H
-   ; BANKSEL TMR1L
-    ;movlw   10000000B ; Test pour accelerer le temps
-   ; movwf   TMR1L
     
-    ;; TEST remplace timer par int RC4
-    
-    BANKSEL PIR0
-    bcf	    PIR0,0
-    
-    
+    ;; Fait clignoter la led à la seconde
     BANKSEL LATA
     movlw   00000100B
     xorwf   LATA,F
+    
     call Interuption_Sec
+    
     BANKSEL PORTC
     retfie 
 ;------------------------------------ 
@@ -141,22 +127,22 @@ PSECT code
 initialisation: 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION I/O ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL PORTA
-    clrf    PORTA	; efface les PORTA, B et C
+    clrf    PORTA	; efface les PORT A, B et C
     clrf    PORTB
     clrf    PORTC
    
-    BANKSEL    LATA     ; efface la dernière valeur de PORTA
+    BANKSEL    LATA     ; efface les valeurs de PORTA
     CLRF       LATA    
     
     BANKSEL TRISA  
     clrf    TRISA	; configure tous les pins du port A en sortie 	
-    movlw   11010001B	; configure les pins du port C 
+    movlw   11010001B	; configure les pins du port C en entrée (1) et sorties (0)
     movwf   TRISC
    
     BANKSEL    ANSELC   
     movlw   00000001B ; configure les pins du port C en digital sauf RC0
     movwf   ANSELC
-    movlw   11010000B	; configure les boutons en pull-up
+    movlw   11010000B	; configure les boutons en pull-up (1)
     movwf   WPUC
     
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION ADC ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -165,7 +151,7 @@ initialisation:
     movwf   ADPCH	; configure le ADC sur le port RC0
     
     BANKSEL ADCON0
-    clrf    ADREF	; congifure tension de réference du ADC
+    clrf    ADREF	; congifure tension de réference du ADC sur Vcc
     movlw   11000000B	
     movwf   ADCON0	; configure le ADC
     bsf	   ADCON0,0
@@ -216,17 +202,17 @@ initialisation:
     clrf    Alarme_Min 
     clrf    Alarme_Active
   
-    ;; Met à jour l'heure
-    movlw   0x01
+    ;; Met à jour l'heure lors du téléversement
+    movlw   0x02
     movwf   Horloge_DHeure
-    movlw   0x08
+    movlw   0x01
     movwf   Horloge_Heure
-    movlw   0x00
+    movlw   0x04
     movwf   Horloge_DMin
-    movlw   0x08
+    movlw   0x02
     movwf   Horloge_Min
        
-    ;; Met à jour l'alarme
+    ;; Met à jour l'alarme lors du téléversement
     movlw   0x01
     movwf   Alarme_DHeure
     movlw   0x08
@@ -351,7 +337,7 @@ Reglage_DHeure:
     movf    ADRESH,W
     BANKSEL  PORTC
     call Potar_Horloge_DHeure
-    btfss   bouton3
+    btfss   validation
     movwf Horloge_DHeure
     call Affiche_Horloge_Cligno
     return
@@ -361,7 +347,7 @@ Reglage_Heure:
     movf    ADRESH,W
     BANKSEL  PORTC
     call Potar_Horloge_Heure
-    btfss   bouton3
+    btfss   validation
     movwf Horloge_Heure
     call Affiche_Horloge_Cligno
     return
@@ -370,7 +356,7 @@ Reglage_DMin:
     movf    ADRESH,W
      BANKSEL  PORTC
     call Potar_DMin
-    btfss   bouton3
+    btfss   validation
     movwf Horloge_DMin
     call Affiche_Horloge_Cligno
     return
@@ -379,7 +365,7 @@ Reglage_Min:
     movf    ADRESH,W
      BANKSEL  PORTC
     call  Potar_Min
-    btfss   bouton3
+    btfss   validation
     movwf Horloge_Min
     call Affiche_Horloge_Cligno
     return
@@ -590,16 +576,16 @@ Alarme:
     
  Toggle_Alarme:
     movlw   00000001B
-    btfss   bouton3
+    btfss   validation
     xorwf   Alarme_Active,F
     return
     
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; REGLAGE  ;;;;;;;;;;;;;;;;;;;;;;;;;
 Reglage_Alarme_Aucun:
-    btfsc   bouton3
+    btfsc   validation
     call    Affiche_Alarme
-    btfss   bouton3
+    btfss   validation
     call    Affiche_Mode_Alarme
     return
 
@@ -608,7 +594,7 @@ Reglage_Alarme_DHeure:
     movf    ADRESH,W
     BANKSEL  PORTC
     call Potar_Alarme_DHeure
-    btfss   bouton3
+    btfss   validation
     movwf Alarme_DHeure
     call Affiche_Alarme_Cligno
     return
@@ -618,7 +604,7 @@ Reglage_Alarme_Heure:
     movf    ADRESH,W
     BANKSEL  PORTC
     call Potar_Alarme_Heure
-    btfss   bouton3
+    btfss   validation
     movwf Alarme_Heure
     call Affiche_Alarme_Cligno
     return
@@ -628,7 +614,7 @@ Reglage_Alarme_DMin:
     movf    ADRESH,W
      BANKSEL  PORTC
     call Potar_DMin
-    btfss   bouton3
+    btfss   validation
     movwf Alarme_DMin
     call Affiche_Alarme_Cligno
     return
@@ -638,7 +624,7 @@ Reglage_Alarme_Min:
     movf    ADRESH,W
      BANKSEL  PORTC
     call Potar_Min
-    btfss   bouton3
+    btfss   validation
     movwf Alarme_Min
     call Affiche_Alarme_Cligno
     return
@@ -717,8 +703,9 @@ Affiche_Mode_Alarme:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN ALARME ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
-    
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; interuption;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INTERRUPTION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Interuption_Sec:
     
     call   Incremente_Horloge_Sec
@@ -734,8 +721,11 @@ Interuption_Sec:
     call   Toggle_Alarme
     
     
+    
     return
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fin interuption ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INTERRUPTION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
 
     
