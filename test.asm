@@ -1,7 +1,20 @@
 ; dÈfinition du processeur 
 PROCESSOR 16f18446 
 #include <xc.inc> 
- 
+    
+    ;;;;;;;;;;REglage de l'heure et de l'alarme à l'allumage;;;;;;;;;;;;;;
+#define dem_H_dheure 0x01
+#define dem_H_heure 0x03
+#define dem_H_dmin 0x02
+#define dem_H_min 0x09
+    
+#define dem_A_dheure 0x01
+#define dem_A_heure 0x02
+#define dem_A_dmin 0x03
+#define dem_A_min 0x03
+#define activation_alarme 0x01 ; 1 pour on et 0 pour OFF
+    
+#define Temps_HommeMort 0xC3 ; Durée avant annulation du reglage (255 - Temps_HommeMort)
 ;------------------------------------ 
 
 ;definition de la configuration 
@@ -49,47 +62,52 @@ config LVP = ON         // Low Voltage Programming Enable bit (Low Voltage progr
 // CONFIG5 
 config CP = OFF         // UserNVM Program memory code protection bit (UserNVM code protection disabled) 
 
-  
-
-  
 
 ;------------------------------------ 
 ;assignation des port du pic 
-#define BMode	PORTC,7  ; Bouton de selection de mode
-#define BReglage    PORTC,6  ; Bouton de selection de reglage
-#define validation	PORTC,4  ; Bouton de validation
-#define potar	PORTC,0 ; Potentiomètre de sélèction de chiffre
-#define led	LATA,2 ; Led fréquence de 1 Hz
-#define seg_clk LATC,1 ;SCK Horloge 7 segments
-#define seg_data LATC,2 ;SD1 Données 7 segments
-#define seg_latch LATC,3 ;LT Validation 7 segments
-#define buzzer LATC,5    ; Buzzer d'alarme
-#define	TMR1F	PIR4,0	  ; Flag du Timer
-#define GIE	INTCON,7    ; Activation des itnerruptions
+#define BMode	PORTC,7		; Bouton de selection de mode
+#define BReglage    PORTC,6	; Bouton de selection de reglage
+#define validation	PORTC,4 ; Bouton de validation
+#define potar	PORTC,0		; Potentiomètre de sélèction de chiffre
+#define led	LATA,2		; Led qui bat la seconde
+#define seg_clk LATC,1		; SCK Horloge 7 segments
+#define seg_data LATC,2		; SD1 Données 7 segments
+#define seg_latch LATC,3	; LT Validation 7 segments
+#define buzzer LATC,5		; Buzzer d'alarme
+#define	TMR1F	PIR4,0		; Flag du Timer
+#define GIE	INTCON,7	; Activation des itnerruptions
 ;------------------------------------ 
 
 ;definition des variables 
 PSECT  udata_bank0    ; debut de la ram 
-temp0:ds 1 
+temp0:ds 1  ;variables de temporisation
 temp1:ds 1 
 temp2:ds 1 
-Reglage:ds 1 ; Type de reglage
-Mode:ds 1   ;  Mode affiché
+Reglage:ds 1 ; Type de reglage selectioné
+Mode:ds 1   ;  Mode selectioné
+Timer_Cancel: ds 1 ; permet de faire une verification d'homme mort lorsqu'un mode de réglage est selectioné
+    
+    ;;;;Variable d'horloge;;;;;
 Horloge_DHeure:ds 1 ; Horloge Dizianes d'heure
 Horloge_Heure: ds 1 ; Horloge Heures
 Horloge_DMin: ds 1  ; Horloge Dizaines de minutes	
 Horloge_Min: ds 1   ; Horloge Minutes
 Horloge_Sec: ds 1   ; Horloge Secondes
+    
+    ;;;;; Variable de chronomètre;;;;
 Chrono_DMin: ds 1 ; Chrono Dizianes d'heure
 Chrono_Min: ds 1    ; Chrono Minutes
 Chrono_DSec: ds 1   ; Chrono Dizaines Secondes
 Chrono_Sec: ds 1    ; Chrono Secondes
+    
+    ;;;;; Variable d'alarme;;;;
 Alarme_DHeure:ds 1 ; Alarme Dizaines d'heures
 Alarme_Heure: ds 1 ; Alarme Heures
 Alarme_DMin: ds 1 ; Alarme Dizaines Minutes
 Alarme_Min: ds 1 ; Alarme Minutes
 Alarme_Active: ds 1 ;Activation Alarme
-Timer_cancel: ds 1 ; 
+    
+
 
 ;------------------------------------ 
 ;definition des vecteurs de reset et d interruption 
@@ -100,19 +118,19 @@ org 000H        ; vecteur de reset
    
 org 004H        ; vecteur d'interruption 
     BANKSEL PIR4
-    bcf	    TMR1F
+    bcf	    TMR1F   ;clear le flag d'interuption
     
     BANKSEL TMR1H	
-    bsf	    TMR1H,7	; Règle le compteur sur une seconde	
+    bsf	    TMR1H,7	; Règle le compteur sur une seconde pour la prochaine interuption	
     
-    ;; Fait clignoter la led à la seconde
+    ;; Fait clignoter la led qui s'allume une seconde puis s'eteint une seconde
     BANKSEL LATA
     movlw   00000100B
     xorwf   LATA,F
     
-    call Interuption_Sec
+    call Interuption_Sec ;appel la fonction d'interuption de seconde
     
-    BANKSEL PORTC
+    BANKSEL PORTC ;on se replace dans le portC car sinon nous avons des problèmes pour lire nos variables par la suite
     retfie 
 ;------------------------------------ 
 
@@ -152,9 +170,9 @@ initialisation:
     
     BANKSEL ADCON0
     clrf    ADREF	; congifure tension de réference du ADC sur Vcc
-    movlw   11000000B	
-    movwf   ADCON0	; configure le ADC
-    bsf	   ADCON0,0
+    movlw   11000000B	;on parametre le convertiseur pour une lecture continu mais on ne la lance pas
+    movwf   ADCON0	
+    
     
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;; CONFIGURATION TIMER ;;;;;;;;;;;;;;;;;;;;;;;;;
     BANKSEL TMR1H	
@@ -191,36 +209,38 @@ initialisation:
     movlw   00000001B
     movwf   Reglage
     
-    ;; Initialise toutes les variables à 0
+    ;; Initialise le chrono à 0
     clrf    Chrono_DMin
     clrf    Chrono_Min
     clrf    Chrono_DSec
     clrf    Chrono_Sec
-    clrf    Alarme_DHeure
-    clrf    Alarme_Heure
-    clrf    Alarme_DMin 	
-    clrf    Alarme_Min 
-    clrf    Alarme_Active
+    
+    ;initialise l'home mort au temps choisis en define
+    movlw   Temps_HommeMort
+    movwf   Timer_Cancel
   
     ;; Met à jour l'heure lors du téléversement
-    movlw   0x02
+    movlw   dem_H_dheure
     movwf   Horloge_DHeure
-    movlw   0x01
+    movlw   dem_H_heure
     movwf   Horloge_Heure
-    movlw   0x04
+    movlw   dem_H_dmin
     movwf   Horloge_DMin
-    movlw   0x02
+    movlw   dem_H_min
     movwf   Horloge_Min
        
     ;; Met à jour l'alarme lors du téléversement
-    movlw   0x01
+    movlw   dem_A_dheure
     movwf   Alarme_DHeure
-    movlw   0x08
+    movlw   dem_A_heure
     movwf   Alarme_Heure
-    movlw   0x00
+    movlw   dem_A_dmin
     movwf   Alarme_DMin
-    movlw   0x09
+    movlw   dem_A_min
     movwf   Alarme_Min
+    movlw   activation_alarme
+    movwf   Alarme_Active
+    
        
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INITIALISATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;  
@@ -231,19 +251,26 @@ initialisation:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
 boucle:                   
-    btfss   BMode
+    btfss   BMode   ;teste si le bouton Mode est appuillé pour afficher la lettre du mode courant
     call    Affiche_Mode
     btfsc   BMode
     call    Selection_Mode
     goto    boucle
 
-Selection_Mode:	;; Affiche le mode selectionné
+Selection_Mode:	;; arbre de déscision en fonction du mode
     btfsc   Mode,0
     call    Horloge	;1er bit à 1 donc Horloge
     btfsc   Mode,1
     call    Chrono	;2eme bit à 1 donc Chrono
     btfsc   Mode,2
     call    Alarme	;3eme bit à 1 donc Alarme
+    
+    BANKSEL ADCON0 
+    btfsc  Reglage,0	;on desactive la lecture continue si nous ne sommes pas en réglage
+    bcf	   ADCON0,0	
+    btfss  Reglage,0	;on active la lecture continue si nous sommes en réglage
+    bsf	   ADCON0,0
+    BANKSEL PORTC 
     return
 
         
@@ -261,7 +288,7 @@ Horloge:
     call    Affiche_Horloge
     btfsc   Reglage,1	; sil le second bit de Réglage est à 1 alors on modifie les dizaines d'heures....
     call    Reglage_Min
-    btfsc   Reglage,2
+    btfsc   Reglage,2	; etcetera
     call    Reglage_DMin
     btfsc   Reglage,3
     call    Reglage_Heure
@@ -271,7 +298,7 @@ Horloge:
 
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INCREMENTATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-Incremente_Horloge_Sec:
+Incremente_Horloge_Sec: ; on incrémente les secondes et on teste si on depasse 60sec on incrémente minute
     incf   Horloge_Sec
     movf   Horloge_Sec,W
     addlw  0xC5
@@ -279,7 +306,7 @@ Incremente_Horloge_Sec:
     call    Incremente_Horloge_Min
     return
     
-Incremente_Horloge_Min:
+Incremente_Horloge_Min: ; on incrémente minute et si on atteind 10 minute on incrémente les dizaines de minute et on clear minute
     clrf   Horloge_Sec
     incf   Horloge_Min
     movf   Horloge_Min,W
@@ -288,7 +315,7 @@ Incremente_Horloge_Min:
     call    Incremente_Horloge_DMin
     return
 
-Incremente_Horloge_DMin:
+Incremente_Horloge_DMin: ; on incrémente dizaine de minute et si on atteind 6 on incrémente les heures et on clear dizaine de minute
     clrf   Horloge_Min
     incf   Horloge_DMin
     movf   Horloge_DMin,W
@@ -297,34 +324,28 @@ Incremente_Horloge_DMin:
     call    Incremente_Horloge_Heure
     return
 
-Incremente_Horloge_Heure:
+Incremente_Horloge_Heure: ; on incrémente heure et si on atteind 10 heures on incrémente les dizaines d'heures et on clear dizaine de minute
     clrf   Horloge_DMin
     incf   Horloge_Heure
     movf   Horloge_Heure,W
-    btfss  Horloge_DHeure,1
-    call   Test_Horloge_DHeure
-    btfsc  Horloge_DHeure,1
+    btfss  Horloge_DHeure,1 ; si on a 1 ou 0 à la dizaine d'heure
+    call   Test_Horloge_DHeure 
+    btfsc  Horloge_DHeure,1 ;si on arrive à 2 pour dizaine d'heure on entre en test
     call    Test_reset_Horloge_Heure
     return
 
-Test_Horloge_DHeure:
+Test_Horloge_DHeure: ; on incrémente si besoin la dizaine d'heure
     addlw  0xF6
-    btfsc  STATUS,0
-    call   Incremente_Horloge_DHeure
+    btfss  STATUS,0
     return
-    
-Incremente_Horloge_DHeure:
     incf    Horloge_DHeure
     clrf    Horloge_Heure
     return
     
-Test_reset_Horloge_Heure:
+Test_reset_Horloge_Heure: ;si on arrive à 24h on reset 
     addlw  0xFC
-    btfsc  STATUS,0
-    call   Reset_Horloge_Heure
+    btfss  STATUS,0
     return
-
-Reset_Horloge_Heure:
     clrf   Horloge_DHeure
     clrf   Horloge_Heure
     return
@@ -334,15 +355,15 @@ Reset_Horloge_Heure:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Reglage_DHeure:
     BANKSEL  ADRESH
-    movf    ADRESH,W
+    movf    ADRESH,W	;lecture du potar
     BANKSEL  PORTC
-    call Potar_Horloge_DHeure
-    btfss   validation
+    call Potar_Horloge_DHeure ;table de comparaison sur dizaine d'heure 0,1 ou 2 
+    btfss   validation	;on test le bouton de validation si activé on écrase la valeur de dizaine d'heure avec celle du potar
     movwf Horloge_DHeure
-    call Affiche_Horloge_Cligno
+    call Affiche_Horloge_Cligno	; on appel la fonction pour faire clignoter l'affichage de dheure
     return
     
-Reglage_Heure:
+Reglage_Heure:	;idem que précédement pour régler heure
      BANKSEL  ADRESH
     movf    ADRESH,W
     BANKSEL  PORTC
@@ -351,7 +372,7 @@ Reglage_Heure:
     movwf Horloge_Heure
     call Affiche_Horloge_Cligno
     return
-Reglage_DMin:
+Reglage_DMin: ;idem que précédement pour régler Dmin
     BANKSEL  ADRESH
     movf    ADRESH,W
      BANKSEL  PORTC
@@ -360,7 +381,7 @@ Reglage_DMin:
     movwf Horloge_DMin
     call Affiche_Horloge_Cligno
     return
-Reglage_Min:
+Reglage_Min: ;idem que précédement pour régler min
      BANKSEL  ADRESH
     movf    ADRESH,W
      BANKSEL  PORTC
@@ -381,11 +402,11 @@ Affiche_Horloge: ;; Affiche l'heure (HH:MM) sur les 7 segments
     call    SetChiffreSeg   ; Envoi l'unité heure
     movf    Horloge_DHeure,W
     call    SetChiffreSeg   ; Envoi la dizaine heure
-    bsf	seg_latch	    ; Affiche le résultat
+    bsf	seg_latch	    ; valide l'affiche du résultat sur le 7seg
     bcf	seg_latch
     return
 
-Affiche_Horloge_Cligno: 
+Affiche_Horloge_Cligno: ;permet de faire clignoter l'affichage en fonction du réglage selectionné
     movf    Horloge_Min,W 
     btfsc   Reglage,1
     movlw   00010110B ;vide
@@ -409,7 +430,7 @@ Affiche_Horloge_Cligno:
     bsf	seg_latch
     bcf	seg_latch
     
-    movlw   0x10
+    movlw   0x10    
     call tempo
     call Affiche_Horloge
     movlw   0x40
@@ -417,7 +438,7 @@ Affiche_Horloge_Cligno:
     return
  
   
-Affiche_Mode_Horloge:
+Affiche_Mode_Horloge:	;affiche la lettre H qui indique que nous sommes en mode horloge
     movlw   00010110B 
     call    SetChiffreSeg
     movlw   00010110B
@@ -455,7 +476,7 @@ Chrono:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INCREMENTATION  ;;;;;;;;;;;;;;;;;;;;;;;;;
     
-Incremente_Chrono_Sec:
+Incremente_Chrono_Sec: ;de meme que pour heure on incrémente le chrono
     incf   Chrono_Sec
     movf   Chrono_Sec,W
     addlw  0xF6
@@ -507,7 +528,7 @@ Affiche_Chrono:		    ;; Affiche le chronomètre (MM:SS) sur les 7 segments
     bcf	seg_latch
     return   
     
-Affiche_Mode_Chrono:
+Affiche_Mode_Chrono: ;affiche la lettre C qui indique que nous sommes en mode chrono
     movlw   00010110B 
     call    SetChiffreSeg
     movlw   00010110B
@@ -545,7 +566,7 @@ Alarme:
     call    Reglage_Alarme_DHeure
     return
 
- Test_Alarme:
+ Test_Alarme: ;on vérifie si toutes les valeurs entre horloge et alarme match alors on buzz
     movf    Alarme_DHeure,W
     subwf   Horloge_DHeure,W
     incf    WREG
@@ -574,7 +595,7 @@ Alarme:
     bsf	   buzzer
     return
     
- Toggle_Alarme:
+ Toggle_Alarme: ;active ou désactive l'alarme
     movlw   00000001B
     btfss   validation
     xorwf   Alarme_Active,F
@@ -716,12 +737,22 @@ Interuption_Sec:
     call   ReglageSet
     btfss  BMode ;si le bouton Mode est apuillé
     call   ModeSet
-    
     btfsc  Reglage,0
     call   Toggle_Alarme
     
+    btfss  Reglage,0
+    call   Homme_mort
     
     
+    
+    return
+Homme_mort:
+    incfsz   Timer_Cancel,f
+    return
+    movlw 00000001B
+    movwf Reglage
+    movlw Temps_HommeMort
+    movwf Timer_Cancel
     return
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INTERRUPTION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -765,6 +796,8 @@ Affiche_Mode:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ReglageSet:
+    movlw Temps_HommeMort
+    movwf Timer_Cancel
     bcf STATUS,0
     rlf Reglage,F
     btfsc Reglage,5
