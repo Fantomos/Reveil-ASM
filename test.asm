@@ -1,10 +1,12 @@
-; dÈfinition du processeur 
+;verssion du 17/12 15h40
+    
+    ; dÈfinition du processeur 
 PROCESSOR 16f18446 
 #include <xc.inc> 
     
     ;;;;;;;;;;REglage de l'heure et de l'alarme à l'allumage;;;;;;;;;;;;;;
 #define dem_H_dheure 0x01
-#define dem_H_heure 0x03
+#define dem_H_heure 0x02
 #define dem_H_dmin 0x02
 #define dem_H_min 0x09
     
@@ -595,22 +597,18 @@ Alarme:
     bsf	   buzzer
     return
     
- Toggle_Alarme: ;active ou désactive l'alarme
-    movlw   00000001B
-    btfss   validation
-    xorwf   Alarme_Active,F
-    return
+
     
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; REGLAGE  ;;;;;;;;;;;;;;;;;;;;;;;;;
-Reglage_Alarme_Aucun:
-    btfsc   validation
+Reglage_Alarme_Aucun: ;lorsque nous sommes en mode alarme mais sans reglage
+    btfsc   validation	;si validation est appuillé on afiche le A et si l'alarme est acivé ou non
     call    Affiche_Alarme
-    btfss   validation
+    btfss   validation	;sinon on va seulement afficher l'heure de l'alarme
     call    Affiche_Mode_Alarme
     return
 
-Reglage_Alarme_DHeure:
+Reglage_Alarme_DHeure:	; le principe est le meme que pour le réglage de l'horloge
     BANKSEL  ADRESH
     movf    ADRESH,W
     BANKSEL  PORTC
@@ -670,7 +668,7 @@ Affiche_Alarme: ;; Affiche l'alarme (HH:MM) sur les 7 segments
     
 
     
-Affiche_Alarme_Cligno: 
+Affiche_Alarme_Cligno: ; affiche l'heure de l'alarme et fait clognoter l'afficheur correspondant au réglage en cour
     movf    Alarme_Min,W 
     btfsc   Reglage,1
     movlw   00010110B ;vide
@@ -702,7 +700,7 @@ Affiche_Alarme_Cligno:
     return
     
        
-Affiche_Mode_Alarme:
+Affiche_Mode_Alarme: ; affiche le A de allarme et Un 1 si l'alarme est activé, un 0 sinon
     movlw   00010110B 
     call    SetChiffreSeg
     movlw   00010110B
@@ -727,31 +725,34 @@ Affiche_Mode_Alarme:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INTERRUPTION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-Interuption_Sec:
+Interuption_Sec:    ;fonction appelé lors de l'interuption chaques secondes
     
-    call   Incremente_Horloge_Sec
-    call   Incremente_Chrono_Sec
-    call   Test_Alarme
+    call   Incremente_Horloge_Sec ;on incrémente le temps pour l'horloge
+    call   Incremente_Chrono_Sec    ;on incrémente le temps pour le chrono
+    call   Test_Alarme		    ;on vérifie si l'alarme doit sonner
     
-    btfss  BReglage ;si le bouton set est apuillé
+    btfss  BReglage ;si le bouton set est apuillé on va modifier reglage
     call   ReglageSet
-    btfss  BMode ;si le bouton Mode est apuillé
+    btfss  BMode ;si le bouton Mode est apuillé on va modifier mode
     call   ModeSet
-    btfsc  Reglage,0
-    call   Toggle_Alarme
     
     btfss  Reglage,0
-    call   Homme_mort
+    call   Homme_mort ;si nous sommes en mode de réglage 
     
-    
-    
+    btfss  Reglage,0	;si non ne sommes pas entrain de faire un réglage
     return
-Homme_mort:
-    incfsz   Timer_Cancel,f
+    btfss   Mode,2	;si nous sommes en mode alarme
     return
-    movlw 00000001B
+    btfss   validation	;si le bouton validatione est enclencé
+    xorwf   Alarme_Active,F ;alors on fait un toogle sur l'activation de l'alarme ON/OFF
+    return
+ 
+Homme_mort:	
+    incfsz   Timer_Cancel,f ;incrémente le timer de l'homme mort
+    return  ;si pas over flow alors on sort
+    movlw 00000001B ;sinon on sort du réglage
     movwf Reglage
-    movlw Temps_HommeMort
+    movlw Temps_HommeMort ; on remet le compteur d'home mort à la valeur choisi au départ
     movwf Timer_Cancel
     return
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -768,20 +769,18 @@ Homme_mort:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT MODE ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 ModeSet:
-    rlf Mode,F
-    bcf	Mode,0
-    btfsc Mode,3
-    call ResetMode
-    call ResetReglage
-    return
-ResetMode:
-    movlw   0x01
+    rlf Mode,F ;on fait un rotate de mode
+    bcf	Mode,0	;comme le rotate place ici des 1 derière on le clear
+    movlw   0x01 ;on place le reset de mode dans le registre pour l'écraser au besoin
+    btfsc Mode,3    ; si on atteind le bit 4 de mode on repart à zero en placant le registre précédement remplit avec la valeur
     movwf   Mode
+    movlw   0x01	;si on change de mode on sort du mode de reglage
+    movwf   Reglage
     return
 
-Affiche_Mode:
-    bcf	  buzzer
-    btfsc Mode,0
+Affiche_Mode: ; permet d'appeler les diferents affichage de mode lorque dans la boucle principale on appuit sur mode brièvement
+    bcf	  buzzer ;on eteind l'alarme
+    btfsc Mode,0    ;on afiche les differentes lettres en fonction du mode dans lequel nous sommes
     call Affiche_Mode_Horloge
     btfsc Mode,1
     call Affiche_Mode_Chrono
@@ -795,17 +794,13 @@ Affiche_Mode:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ReglageSet:
-    movlw Temps_HommeMort
+ReglageSet: ;de meme que pour mode on fait ici un rotate de reglage et si depassement on le remet au depart
+    movlw Temps_HommeMort ;on va juste reset l'homme mort à sa valeur de depart à chaque fois que l'on chage de reglage
     movwf Timer_Cancel
     bcf STATUS,0
     rlf Reglage,F
-    btfsc Reglage,5
-    call ResetReglage
-    return
-
-ResetReglage:
     movlw   0x01
+    btfsc Reglage,5
     movwf   Reglage
     return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -816,10 +811,10 @@ ResetReglage:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;; REGISTRES 7 SEGMENTS ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
-SetChiffreSeg: 
-   call table
-   call SetBitSeg
-   rlf	WREG,W
+SetChiffreSeg: ;on arrive dans cette fonction avec dans wreg la valeur du chiffre à afficher
+   call table ;la table nous revois les segment à allumer
+   call SetBitSeg   ; on envois la donné du 1er bit au 7seg
+   rlf	WREG,W	    ;puis on rotate pour pouvoir utiliser une seule fonction
    call SetBitSeg
    rlf	WREG,W
    call SetBitSeg
@@ -837,25 +832,25 @@ SetChiffreSeg:
 
     
 SetBitSeg:
-    btfss WREG,7
-    call DataL
+    btfss WREG,7 ; en fonction de la valeur du bit de poid le plus fort de Wreg, on envois un 1 ou un 0 sur le bus de nonnée des 7 seg
+    call DataL	;on envois un 0
     btfsc WREG,7
-    call DataH
+    call DataH	;on envois un 1
     return
     
 DataH:
-    bsf	    seg_data
-    bsf	    seg_clk
+    bsf	    seg_data	;on met la donné 1 sur le bus de donnée
+    bsf	    seg_clk	; on créer un front pour la valider
     bcf	    seg_clk
     return
     
 DataL:
-    bcf	    seg_data
+    bcf	    seg_data	;de meme avec un 0 e donnée
     bsf	    seg_clk
     bcf	    seg_clk
     return
     
-table:
+table:	;table qui renvois un chiffre ou une lettre codé sur des segments
     brw
     retlw   01111110B ;0   0
     retlw   00001010B ;1    1
@@ -891,7 +886,7 @@ table:
 ;;;;;;;;;;;;;;;;;;;;;;;;;; LECTURE POTAR  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;     
    
-Potar_Horloge_DHeure:
+Potar_Horloge_DHeure: ;permet de lire le potar et de renvoyer une valeur entre 0 et 2 si heure est inferieur strictement à 4 et entre 0 et 1 sinon
     addlw   0x19
     btfsc   STATUS,0
     retlw   0x00
@@ -905,7 +900,7 @@ Potar_Horloge_DHeure:
     retlw   0x02
     return
     
-Potar_Horloge_Heure:  
+Potar_Horloge_Heure:  ;permet de lire le potar et de renvoyer une valeur entre 0 et 9 ou 0 et 3 si DHeure est à 2.
     addlw   0x19
     btfsc   STATUS,0
     retlw   0x00
@@ -938,7 +933,7 @@ Potar_Horloge_Heure:
     retlw   0x09
     return
     
-Potar_DMin:
+Potar_DMin: ; renvois un chiffre entre 0 et 6 
     addlw   0x19
     btfsc   STATUS,0
     retlw   0x00
@@ -957,7 +952,7 @@ Potar_DMin:
     retlw   0x05
     return
     
-Potar_Min:
+Potar_Min: ;renvois un chiffre entre 0 et 9
     addlw   0x19
     btfsc   STATUS,0
     retlw   0x00
@@ -989,7 +984,7 @@ Potar_Min:
     return
     
     
-Potar_Alarme_DHeure:
+Potar_Alarme_DHeure: ;meme consept que pour les heure mais pour l'allarme
     addlw   0x19
     btfsc   STATUS,0
     retlw   0x00
@@ -1064,9 +1059,7 @@ tempo3:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
       
     
-    end        ; fin du code source 
-
-     
+    end        ; fin du code source      
 
   
 
