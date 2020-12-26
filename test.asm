@@ -1,4 +1,4 @@
-;verssion du 17/12 15h40
+;verssion du 26/12 15h40
     
     ; dÈfinition du processeur 
 PROCESSOR 16f18446 
@@ -304,8 +304,8 @@ Incremente_Horloge_Sec: ; on incrémente les secondes et on teste si on depasse 6
     incf   Horloge_Sec
     movf   Horloge_Sec,W
     addlw  0xC5
-    btfsc   STATUS,0
-    call    Incremente_Horloge_Min
+    btfsc  STATUS,0
+    call   Incremente_Horloge_Min
     return
     
 Incremente_Horloge_Min: ; on incrémente minute et si on atteind 10 minute on incrémente les dizaines de minute et on clear minute
@@ -313,8 +313,8 @@ Incremente_Horloge_Min: ; on incrémente minute et si on atteind 10 minute on inc
     incf   Horloge_Min
     movf   Horloge_Min,W
     addlw  0xF6
-    btfsc   STATUS,0
-    call    Incremente_Horloge_DMin
+    btfsc  STATUS,0
+    call   Incremente_Horloge_DMin
     return
 
 Incremente_Horloge_DMin: ; on incrémente dizaine de minute et si on atteind 6 on incrémente les heures et on clear dizaine de minute
@@ -322,8 +322,8 @@ Incremente_Horloge_DMin: ; on incrémente dizaine de minute et si on atteind 6 on
     incf   Horloge_DMin
     movf   Horloge_DMin,W
     addlw  0xFA
-    btfsc   STATUS,0
-    call    Incremente_Horloge_Heure
+    btfsc  STATUS,0
+    call   Incremente_Horloge_Heure
     return
 
 Incremente_Horloge_Heure: ; on incrémente heure et si on atteind 10 heures on incrémente les dizaines d'heures et on clear dizaine de minute
@@ -333,15 +333,15 @@ Incremente_Horloge_Heure: ; on incrémente heure et si on atteind 10 heures on in
     btfss  Horloge_DHeure,1 ; si on a 1 ou 0 à la dizaine d'heure
     call   Test_Horloge_DHeure 
     btfsc  Horloge_DHeure,1 ;si on arrive à 2 pour dizaine d'heure on entre en test
-    call    Test_reset_Horloge_Heure
+    call   Test_reset_Horloge_Heure
     return
 
 Test_Horloge_DHeure: ; on incrémente si besoin la dizaine d'heure
     addlw  0xF6
     btfss  STATUS,0
     return
-    incf    Horloge_DHeure
-    clrf    Horloge_Heure
+    incf   Horloge_DHeure
+    clrf   Horloge_Heure
     return
     
 Test_reset_Horloge_Heure: ;si on arrive à 24h on reset 
@@ -357,40 +357,40 @@ Test_reset_Horloge_Heure: ;si on arrive à 24h on reset
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Reglage_DHeure:
     BANKSEL  ADRESH
-    movf    ADRESH,W	;lecture du potar
+    movf     ADRESH,W	;lecture du potar
     BANKSEL  PORTC
-    call Potar_Horloge_DHeure ;table de comparaison sur dizaine d'heure 0,1 ou 2 
-    btfss   validation	;on test le bouton de validation si activé on écrase la valeur de dizaine d'heure avec celle du potar
-    movwf Horloge_DHeure
-    call Affiche_Horloge_Cligno	; on appel la fonction pour faire clignoter l'affichage de dheure
+    call     Potar_Horloge_DHeure ;table de comparaison sur dizaine d'heure 0,1 ou 2 
+    btfss    validation	;on test le bouton de validation si activé on écrase la valeur de dizaine d'heure avec celle du potar
+    movwf    Horloge_DHeure
+    call     Affiche_Horloge_Cligno	; on appel la fonction pour faire clignoter l'affichage de dheure
     return
     
 Reglage_Heure:	;idem que précédement pour régler heure
-     BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-    BANKSEL  PORTC
-    call Potar_Horloge_Heure
+    BANKSEL PORTC
+    call    Potar_Horloge_Heure
     btfss   validation
-    movwf Horloge_Heure
-    call Affiche_Horloge_Cligno
+    movwf   Horloge_Heure
+    call    Affiche_Horloge_Cligno
     return
 Reglage_DMin: ;idem que précédement pour régler Dmin
-    BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-     BANKSEL  PORTC
-    call Potar_DMin
+    BANKSEL PORTC
+    call    Potar_DMin
     btfss   validation
-    movwf Horloge_DMin
-    call Affiche_Horloge_Cligno
+    movwf   Horloge_DMin
+    call    Affiche_Horloge_Cligno
     return
 Reglage_Min: ;idem que précédement pour régler min
-     BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-     BANKSEL  PORTC
-    call  Potar_Min
+    BANKSEL PORTC
+    call    Potar_Min
     btfss   validation
-    movwf Horloge_Min
-    call Affiche_Horloge_Cligno
+    movwf   Horloge_Min
+    call    Affiche_Horloge_Cligno
     return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
@@ -404,8 +404,8 @@ Affiche_Horloge: ;; Affiche l'heure (HH:MM) sur les 7 segments
     call    SetChiffreSeg   ; Envoi l'unité heure
     movf    Horloge_DHeure,W
     call    SetChiffreSeg   ; Envoi la dizaine heure
-    bsf	seg_latch	    ; valide l'affiche du résultat sur le 7seg
-    bcf	seg_latch
+    bsf	    seg_latch	    ; valide l'affiche du résultat sur le 7seg
+    bcf	    seg_latch
     return
 
 Affiche_Horloge_Cligno: ;permet de faire clignoter l'affichage en fonction du réglage selectionné
@@ -429,14 +429,14 @@ Affiche_Horloge_Cligno: ;permet de faire clignoter l'affichage en fonction du ré
     movlw   00010110B ;vide
     call    SetChiffreSeg
     
-    bsf	seg_latch
-    bcf	seg_latch
+    bsf	    seg_latch
+    bcf	    seg_latch
     
     movlw   0x10    
-    call tempo
-    call Affiche_Horloge
+    call    tempo
+    call    Affiche_Horloge
     movlw   0x40
-    call tempo
+    call    tempo
     return
  
   
@@ -449,9 +449,8 @@ Affiche_Mode_Horloge:	;affiche la lettre H qui indique que nous sommes en mode h
     call    SetChiffreSeg
     movlw   0x0C	;lettre H de la table
     call    SetChiffreSeg
-     bsf	seg_latch
-   bcf	seg_latch
-    
+    bsf     seg_latch
+    bcf	    seg_latch
     return
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;     
@@ -467,13 +466,13 @@ Affiche_Mode_Horloge:	;affiche la lettre H qui indique que nous sommes en mode h
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
 Chrono:
-    call Affiche_Chrono
-    btfsc BReglage	; sil le second bit de Réglage est à 1 alors on reset le chrono
+    call    Affiche_Chrono
+    btfsc   BReglage	; sil le second bit de Réglage est à 1 alors on reset le chrono
     return
-    clrf     Chrono_DMin
-    clrf     Chrono_Min
-    clrf     Chrono_Sec
-    clrf     Chrono_DSec
+    clrf    Chrono_DMin
+    clrf    Chrono_Min
+    clrf    Chrono_Sec
+    clrf    Chrono_DSec
     return
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INCREMENTATION  ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -482,17 +481,17 @@ Incremente_Chrono_Sec: ;de meme que pour heure on incrémente le chrono
     incf   Chrono_Sec
     movf   Chrono_Sec,W
     addlw  0xF6
-    btfsc   STATUS,0
-    call    Incremente_Chrono_DSec
+    btfsc  STATUS,0
+    call   Incremente_Chrono_DSec
     return
     
 Incremente_Chrono_DSec:
-    clrf    Chrono_Sec
+    clrf   Chrono_Sec
     incf   Chrono_DSec
     movf   Chrono_DSec,W
     addlw  0xFA
-    btfsc   STATUS,0
-    call    Incremente_Chrono_Min
+    btfsc  STATUS,0
+    call   Incremente_Chrono_Min
     return
     
 Incremente_Chrono_Min:
@@ -500,8 +499,8 @@ Incremente_Chrono_Min:
     incf   Chrono_Min
     movf   Chrono_Min,W
     addlw  0xF6
-    btfsc   STATUS,0
-    call    Incremente_Chrono_DMin
+    btfsc  STATUS,0
+    call   Incremente_Chrono_DMin
     return
 
 Incremente_Chrono_DMin:
@@ -509,8 +508,8 @@ Incremente_Chrono_DMin:
     incf   Chrono_DMin
     movf   Chrono_DMin,W
     addlw  0xF6
-    btfsc   STATUS,0
-    clrf    Chrono_DMin
+    btfsc  STATUS,0
+    clrf   Chrono_DMin
     return
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INCREMENTATION  ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -526,8 +525,8 @@ Affiche_Chrono:		    ;; Affiche le chronomètre (MM:SS) sur les 7 segments
     call    SetChiffreSeg   ; Envoi l'unité minute
     movf    Chrono_DMin,W
     call    SetChiffreSeg   ; Envoi la dizaine minute
-    bsf	seg_latch	    ; Affiche le résultat
-    bcf	seg_latch
+    bsf	    seg_latch	    ; Affiche le résultat
+    bcf	    seg_latch
     return   
     
 Affiche_Mode_Chrono: ;affiche la lettre C qui indique que nous sommes en mode chrono
@@ -539,8 +538,8 @@ Affiche_Mode_Chrono: ;affiche la lettre C qui indique que nous sommes en mode ch
     call    SetChiffreSeg
     movlw   0x0B    ;lettre C de la table
     call    SetChiffreSeg
-    bsf	seg_latch
-    bcf	seg_latch
+    bsf	    seg_latch
+    bcf	    seg_latch
     return    
     
    
@@ -594,7 +593,7 @@ Alarme:
     return
     btfss   Alarme_Active,0
     return
-    bsf	   buzzer
+    bsf	    buzzer
     return
     
 
@@ -609,43 +608,43 @@ Reglage_Alarme_Aucun: ;lorsque nous sommes en mode alarme mais sans reglage
     return
 
 Reglage_Alarme_DHeure:	; le principe est le meme que pour le réglage de l'horloge
-    BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-    BANKSEL  PORTC
-    call Potar_Alarme_DHeure
+    BANKSEL PORTC
+    call    Potar_Alarme_DHeure
     btfss   validation
-    movwf Alarme_DHeure
-    call Affiche_Alarme_Cligno
+    movwf   Alarme_DHeure
+    call    Affiche_Alarme_Cligno
     return
     
 Reglage_Alarme_Heure:
-     BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-    BANKSEL  PORTC
-    call Potar_Alarme_Heure
+    BANKSEL PORTC
+    call    Potar_Alarme_Heure
     btfss   validation
-    movwf Alarme_Heure
-    call Affiche_Alarme_Cligno
+    movwf   Alarme_Heure
+    call    Affiche_Alarme_Cligno
     return
     
 Reglage_Alarme_DMin:
-    BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-     BANKSEL  PORTC
-    call Potar_DMin
+    BANKSEL PORTC
+    call    Potar_DMin
     btfss   validation
-    movwf Alarme_DMin
-    call Affiche_Alarme_Cligno
+    movwf   Alarme_DMin
+    call    Affiche_Alarme_Cligno
     return
     
 Reglage_Alarme_Min:
-     BANKSEL  ADRESH
+    BANKSEL ADRESH
     movf    ADRESH,W
-     BANKSEL  PORTC
-    call Potar_Min
+    BANKSEL PORTC
+    call    Potar_Min
     btfss   validation
-    movwf Alarme_Min
-    call Affiche_Alarme_Cligno
+    movwf   Alarme_Min
+    call    Affiche_Alarme_Cligno
     return
  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN REGLAGE  ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -654,7 +653,7 @@ Reglage_Alarme_Min:
     
        
 Affiche_Alarme: ;; Affiche l'alarme (HH:MM) sur les 7 segments
-    movf   Alarme_Min,W 
+    movf    Alarme_Min,W 
     call    SetChiffreSeg   ; Envoi l'unité seconde
     movf    Alarme_DMin,W
     call    SetChiffreSeg   ; Envoi la dizaine seconde
@@ -662,8 +661,8 @@ Affiche_Alarme: ;; Affiche l'alarme (HH:MM) sur les 7 segments
     call    SetChiffreSeg   ; Envoi l'unité heure
     movf    Alarme_DHeure,W
     call    SetChiffreSeg   ; Envoi la dizaine heure
-    bsf	seg_latch	    ; Affiche le résultat
-    bcf	seg_latch
+    bsf	    seg_latch	    ; Affiche le résultat
+    bcf	    seg_latch
     return
     
 
@@ -689,14 +688,14 @@ Affiche_Alarme_Cligno: ; affiche l'heure de l'alarme et fait clognoter l'affiche
     movlw   00010110B ;vide
     call    SetChiffreSeg
     
-    bsf	seg_latch
-    bcf	seg_latch
+    bsf	    seg_latch
+    bcf	    seg_latch
     
     movlw   0x10
-    call tempo
-    call Affiche_Alarme
+    call    tempo
+    call    Affiche_Alarme
     movlw   0x40
-    call tempo
+    call    tempo
     return
     
        
@@ -712,9 +711,8 @@ Affiche_Mode_Alarme: ; affiche le A de allarme et Un 1 si l'alarme est activé, u
     call    SetChiffreSeg
     movlw   0x0A    ;Lettre A de la table
     call    SetChiffreSeg
-     bsf	seg_latch
-   bcf	seg_latch
-  
+    bsf	    seg_latch
+    bcf	    seg_latch
     return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN AFFICHAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 
@@ -748,12 +746,12 @@ Interuption_Sec:    ;fonction appelé lors de l'interuption chaques secondes
     return
  
 Homme_mort:	
-    incfsz   Timer_Cancel,f ;incrémente le timer de l'homme mort
-    return  ;si pas over flow alors on sort
-    movlw 00000001B ;sinon on sort du réglage
-    movwf Reglage
-    movlw Temps_HommeMort ; on remet le compteur d'home mort à la valeur choisi au départ
-    movwf Timer_Cancel
+    incfsz  Timer_Cancel,f ;incrémente le timer de l'homme mort
+    return	      ;si pas over flow alors on sort
+    movlw   00000001B ;sinon on sort du réglage
+    movwf   Reglage
+    movlw   Temps_HommeMort ; on remet le compteur d'home mort à la valeur choisi au départ
+    movwf   Timer_Cancel
     return
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; FIN INTERRUPTION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -769,23 +767,23 @@ Homme_mort:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT MODE ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 ModeSet:
-    rlf Mode,F ;on fait un rotate de mode
-    bcf	Mode,0	;comme le rotate place ici des 1 derière on le clear
+    rlf	    Mode,F ;on fait un rotate de mode
+    bcf	    Mode,0	;comme le rotate place ici des 1 derière on le clear
     movlw   0x01 ;on place le reset de mode dans le registre pour l'écraser au besoin
-    btfsc Mode,3    ; si on atteind le bit 4 de mode on repart à zero en placant le registre précédement remplit avec la valeur
+    btfsc   Mode,3    ; si on atteind le bit 4 de mode on repart à zero en placant le registre précédement remplit avec la valeur
     movwf   Mode
     movlw   0x01	;si on change de mode on sort du mode de reglage
     movwf   Reglage
     return
 
 Affiche_Mode: ; permet d'appeler les diferents affichage de mode lorque dans la boucle principale on appuit sur mode brièvement
-    bcf	  buzzer ;on eteind l'alarme
-    btfsc Mode,0    ;on afiche les differentes lettres en fonction du mode dans lequel nous sommes
-    call Affiche_Mode_Horloge
-    btfsc Mode,1
-    call Affiche_Mode_Chrono
-    btfsc Mode,2
-    call Affiche_Mode_Alarme
+    bcf	    buzzer ;on eteind l'alarme
+    btfsc   Mode,0    ;on afiche les differentes lettres en fonction du mode dans lequel nous sommes
+    call    Affiche_Mode_Horloge
+    btfsc   Mode,1
+    call    Affiche_Mode_Chrono
+    btfsc   Mode,2
+    call    Affiche_Mode_Alarme
     return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;; FIN CHANGEMENT MODE ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -795,12 +793,12 @@ Affiche_Mode: ; permet d'appeler les diferents affichage de mode lorque dans la 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; CHANGEMENT REGLAGE ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ReglageSet: ;de meme que pour mode on fait ici un rotate de reglage et si depassement on le remet au depart
-    movlw Temps_HommeMort ;on va juste reset l'homme mort à sa valeur de depart à chaque fois que l'on chage de reglage
-    movwf Timer_Cancel
-    bcf STATUS,0
-    rlf Reglage,F
+    movlw   Temps_HommeMort ;on va juste reset l'homme mort à sa valeur de depart à chaque fois que l'on chage de reglage
+    movwf   Timer_Cancel
+    bcf	    STATUS,0
+    rlf	    Reglage,F
     movlw   0x01
-    btfsc Reglage,5
+    btfsc   Reglage,5
     movwf   Reglage
     return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -832,10 +830,10 @@ SetChiffreSeg: ;on arrive dans cette fonction avec dans wreg la valeur du chiffr
 
     
 SetBitSeg:
-    btfss WREG,7 ; en fonction de la valeur du bit de poid le plus fort de Wreg, on envois un 1 ou un 0 sur le bus de nonnée des 7 seg
-    call DataL	;on envois un 0
-    btfsc WREG,7
-    call DataH	;on envois un 1
+    btfss   WREG,7 ; en fonction de la valeur du bit de poid le plus fort de Wreg, on envois un 1 ou un 0 sur le bus de nonnée des 7 seg
+    call    DataL	;on envois un 0
+    btfsc   WREG,7
+    call    DataH	;on envois un 1
     return
     
 DataH:
